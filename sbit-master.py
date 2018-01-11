@@ -2,7 +2,6 @@ import boto3
 import re
 
 '''
-Domain
 # DCs
 # FSs
 KeyName
@@ -12,14 +11,18 @@ Drive Sizes
 
 def getDomainName():
     validDomain = False
-    userDomain = input('Domain Name: ')
-    regex = re.compile('[A-Za-z0-9]([A-Za-z0-9-]*\.)+[A-Za-z0-9]+')
-    if(regex.match(userDomain)):
-        print(userDomain)
-'''        validDomain = True
-    else:
-        print('
+    #Loop until the user enters a valid domain
+    while(not validDomain):
+        userDomain = input('Domain Name: ')
+        #The domain can include upper and lowercase letters, numbers, and
+        #dashes (-), as long as the dashes are not the first or last 
+        #character. Ex. "-example.com" = invalid, "ex-ample.com" = valid.
+        regex = re.compile('[A-Za-z0-9]([A-Za-z0-9-]*\.)+[A-Za-z0-9]+')
+        if(regex.match(userDomain)):
+            validDomain = True
+        else:
+            print('Invalid domain. Please enter a valid domain. Domain names must contain only upper and lowercase letters and numbers. Hyphens or dashes (-) are allowed only if they are NOT the first or last character.')
+    return userDomain
+#print(getDomainName())
 
-'''
 
-getDomainName()
