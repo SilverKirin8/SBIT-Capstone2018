@@ -7,14 +7,68 @@ MIN_DCS=2
 MAX_VOLUME_SIZE=1500
 MIN_VOLUME_SIZE=10
 
+SECTION_SEPARATOR = '#'*60
+
+'''
+DON'T FORGET TO UPDATE CLOUDFORMATION TEMPLATE LOCATIONS
+(Either replace references to or instantiate following vars)
+
+Var Names:
+vpcTemplateUrl
+'''
+
 ec2 = boto3.resource('ec2') #EC2 object allows connection and manipulation of AWS EC2 resource types
+cloudFormationClient = boto3.client('cloudformation') #CloudFormation client allows creation of AWS resources in a stack by using CloudFormation templates
+
+def main():
+    #Welcome message
+    print(SECTION_SEPARATOR)
+    print('Welcome to SBIT: The Small Business IT automation suite!')
+    print('Please enter the following information and we\'ll get started.\n\n')
+
+    #Gather data from user
+    userDomain = getDomainName()
+    userKeyPair = getKeyPairName()
+    userNumDcs = getNumDcs()
+    userNumFileServers = getNumFileServers()
+    userVolumeSize = getVolumeSize()
+    userDcInstanceType = getInstanceType('Please enter the instance type to use for Domain Controllers [Default: t2.micro]: ')
+    userFsInstanceType = getInstanceType('Please enter the instance type to use for File Servers [Default: t2.micro]: ')
+    userExchangeInstanceType = getInstanceType('Please enter the instance type to use for Exchange servers [Default: t2.micro]: ')
+    userMiscInstanceType = getInstanceType('Please enter the instance type to use for all other servers (VPN, 802.1x Security, Certificate Authority) [Default: t2.micro]: ')
+    #userDomainAdminUsername = getUsername('Enter a username for the domain administrator account (separate account from the default "Administrator" account): ')
+    userDomainAdminPassword = getPassword('Enter a password for the domain administrator account: ')
+    userRestoreModePassword = getPassword('Enter a password for Active Directory Restore Mode: ')
+
+    #Build VPC and other networking resources
+    buildVPC()
+
+    #Build instances...
+
+#Build VPC and other networking resources
+def buildVPC():
+    #vpcStackWaiter can be called to halt script execution until the specified stack is finished executing/building
+    vpcStackWaiter = cloudFormationClient.get_waiter('stack_create_complete')
+    
+    #Print extimated time to completion
+    print('\n' + SECTION_SEPARATOR)
+    print('Building AWS Networking...')
+    print('Estimated time to completion: ~2-5 min.')
+    
+    vpcStackResponse = cloudFormationClient.create_stack(
+        StackName='CapstoneVPCStack',
+        TemplateURL=vpcTemplateUrl,
+        )
+    vpcStackWaiter.wait(StackName=vpcStackResponse['StackId'])
+
+    print('AWS Networking... Build Complete!')
 
 #Prompt for and validate the Domain Name
 def getDomainName():
     validDomain = False
     #Loop until the user enters a valid domain
     while(not validDomain):
-        userDomain = input('Domain Name: ')
+        userDomain = input('Please enter your Domain Name: ')
         #The domain can include upper and lowercase letters, numbers, and
         #dashes (-), as long as the dashes are not the first or last 
         #character. Ex. "-example.com" = invalid, "ex-ample.com" = valid.
@@ -36,7 +90,7 @@ def getKeyPairName():
     validKeyPairName = False
     #Prompt for and validate Key Pair Name
     while(not validKeyPairName):
-        userKeyPairName = input('Key Pair: ')
+        userKeyPairName = input('Please enter the name of the Key Pair (used when accessing instances): ')
         if(not userKeyPairName in validPairNames):
             print('Please, enter the name of the key pair you created in AWS.')
         else:
@@ -76,7 +130,7 @@ def getNumFileServers():
         else:
             validNum = True
     #Return the default if the user enters nothing
-    if(userNumDcs == ''):
+    if(userNumFileServers == ''):
         return MIN_DCS
     else:
         return int(userNumFileServers)
@@ -133,4 +187,7 @@ def getPassword(message):
             print('Invalid password. Password should be 8 characters or more and contain an uppercase letter, lowercase letter, number, and symbol.')
     return userPassword
 
-print(getPassword('Enter a password for the domain administrator account (separate account from the default "Administrator" account): '))
+
+
+if __name__ == "__main__":
+    main()
