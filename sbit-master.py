@@ -2,9 +2,6 @@ import boto3
 import re
 import getpass
 
-'''
-Admin Passwords
-'''
 MAX_DCS=8
 MIN_DCS=2
 MAX_VOLUME_SIZE=1500

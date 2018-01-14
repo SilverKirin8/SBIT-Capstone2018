@@ -1,0 +1,257 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >
+    This template will build the networking environment for my Capstone 2018 project. This environment includes a VPC, 
+    two private Subnets spanning two Availability Zones, one public Subnets (possibly two spanning the same two 
+    Availability Zones), a NetworkACL for each Subnet, Route Tables for each subnet, an Internet Gateway for the 
+    public Subnet(s), and a NAT Gateway for the private Subnets.
+    
+    -To Do-     (at some point...)
+    Three Route Tables - One for each subnet
+    NAT Gateway
+    
+    => May add second public subnet at later date
+    => Security Groups will be made with each instance
+Parameters:
+    VpcCidrBlock:
+        Type: String
+        Default: "10.0.0.0/16"
+        Description: "Cidr Block to be used for VPC. Default is 10.0.0.0/16"
+    PubSub1CidrBlock:
+        Type: String
+        Default: "10.0.0.0/23"
+        Description: "Cidr Block to be used for Private Subnet 1 (located in PrimaryAZ). Default is 10.0.0.0/23"
+    PrivSub1CidrBlock:
+        Type: String
+        Default: "10.0.2.0/23"
+        Description: "Cidr Block to be used for Private Subnet 1 (located in PrimaryAZ). Default is 10.0.2.0/23"
+    PrivSub2CidrBlock:
+        Type: String
+        Default: "10.0.4.0/23"
+        Description: "Cidr Block to be used for Private Subnet 2 (located in SecondaryAZ). Default is 10.0.4.0/23"
+    PrimaryAZ:
+        Type: String
+        Default: "us-east-2a"
+        Description: "Primary Availability Zone in the VPC. (If there is only one public subnet, it will be located in this AZ.)"
+    SecondaryAZ:
+        Type: String
+        Default: "us-east-2b"
+        Description: "Secondary Availability Zone in the VPC."
+Resources:
+    Vpc:
+        Type: "AWS::EC2::VPC"
+        Properties:
+            CidrBlock: !Ref VpcCidrBlock
+            EnableDnsSupport: True
+            EnableDnsHostnames: True
+            InstanceTenancy: "default"
+            Tags:
+                - Key: "Name"
+                  Value: "CapstoneVPC"
+
+    InternetGW:
+        Type: "AWS::EC2::InternetGateway"
+        Properties:
+            Tags:
+                - Key: "Name"
+                  Value: "InternetGW"
+    AttachInternetGWtoVpc:
+        Type: "AWS::EC2::VPCGatewayAttachment"
+        Properties:
+            InternetGatewayId: !Ref InternetGW
+            VpcId: !Ref Vpc
+
+    PrivSub1:
+        Type: "AWS::EC2::Subnet"
+        Properties:
+            AvailabilityZone: !Ref PrimaryAZ
+            CidrBlock: !Ref PrivSub1CidrBlock
+            Tags:
+                - Key: "Name"
+                  Value: "PrivateSubnet1"
+            VpcId: !Ref Vpc
+    PrivSub2:
+        Type: "AWS::EC2::Subnet"
+        Properties:
+            AvailabilityZone: !Ref SecondaryAZ
+            CidrBlock: !Ref PrivSub2CidrBlock
+            Tags:
+                - Key: "Name"
+                  Value: "PrivateSubnet2"
+            VpcId: !Ref Vpc
+    PubSub1:
+        Type: "AWS::EC2::Subnet"
+        Properties:
+            AvailabilityZone: !Ref PrimaryAZ
+            CidrBlock: !Ref PubSub1CidrBlock
+            Tags:
+                - Key: "Name"
+                  Value: "PublicSubnet1"
+            VpcId: !Ref Vpc
+
+    PrivSub1NACL:
+        Type: "AWS::EC2::NetworkAcl"
+        Properties:
+            Tags:
+                - Key: "Name"
+                  Value: "Private Subnet 1 Network ACL"
+            VpcId: !Ref Vpc
+    AssociatePrivSub1toPrivSub1NACL:
+        Type: "AWS::EC2::SubnetNetworkAclAssociation"
+        Properties:
+            SubnetId: !Ref PrivSub1
+            NetworkAclId: !Ref PrivSub1NACL
+    AllowToPrivSub2:
+        Type: "AWS::EC2::NetworkAclEntry"
+        Properties:
+            CidrBlock: !Ref PrivSub2CidrBlock
+            Egress: True
+            NetworkAclId: !Ref PrivSub1NACL
+            Protocol: -1
+            RuleAction: "allow"
+            RuleNumber: 100
+    AllowToPubSub1:
+        Type: "AWS::EC2::NetworkAclEntry"
+        Properties:
+            CidrBlock: !Ref PubSub1CidrBlock
+            Egress: True
+            NetworkAclId: !Ref PrivSub1NACL
+            Protocol: -1
+            RuleAction: "allow"
+            RuleNumber: 200
+    AllowFromPrivSub2:
+        Type: "AWS::EC2::NetworkAclEntry"
+        Properties:
+            CidrBlock: !Ref PrivSub2CidrBlock
+            Egress: False
+            NetworkAclId: !Ref PrivSub1NACL
+            Protocol: -1
+            RuleAction: "allow"
+            RuleNumber: 100
+    AllowFromPubSub1:
+        Type: "AWS::EC2::NetworkAclEntry"
+        Properties:
+            CidrBlock: !Ref PubSub1CidrBlock
+            Egress: False
+            NetworkAclId: !Ref PrivSub1NACL
+            Protocol: -1
+            RuleAction: "allow"
+            RuleNumber: 200
+
+    PrivSub2NACL:
+        Type: "AWS::EC2::NetworkAcl"
+        Properties:
+            Tags:
+                - Key: "Name"
+                  Value: "Private Subnet 2 Network ACL"
+            VpcId: !Ref Vpc
+    AssociatePrivSub2toPrivSub2NACL:
+        Type: "AWS::EC2::SubnetNetworkAclAssociation"
+        Properties:
+            SubnetId: !Ref PrivSub2
+            NetworkAclId: !Ref PrivSub2NACL
+    AllowToPrivSub1:
+        Type: "AWS::EC2::NetworkAclEntry"
+        Properties:
+            CidrBlock: !Ref PrivSub1CidrBlock
+            Egress: True
+            NetworkAclId: !Ref PrivSub2NACL
+            Protocol: -1
+            RuleAction: "allow"
+            RuleNumber: 100
+    AllowToPubSub1:
+        Type: "AWS::EC2::NetworkAclEntry"
+        Properties:
+            CidrBlock: !Ref PubSub1CidrBlock
+            Egress: True
+            NetworkAclId: !Ref PrivSub2NACL
+            Protocol: -1
+            RuleAction: "allow"
+            RuleNumber: 200
+    AllowFromPrivSub1:
+        Type: "AWS::EC2::NetworkAclEntry"
+        Properties:
+            CidrBlock: !Ref PrivSub1CidrBlock
+            Egress: False
+            NetworkAclId: !Ref PrivSub2NACL
+            Protocol: -1
+            RuleAction: "allow"
+            RuleNumber: 100
+    AllowFromPubSub1:
+        Type: "AWS::EC2::NetworkAclEntry"
+        Properties:
+            CidrBlock: !Ref PubSub1CidrBlock
+            Egress: False
+            NetworkAclId: !Ref PrivSub2NACL
+            Protocol: -1
+            RuleAction: "allow"
+            RuleNumber: 200
+
+    PubSub1NACL:
+        Type: "AWS::EC2::NetworkAcl"
+        Properties:
+            Tags:
+                - Key: "Name"
+                  Value: "Public Subnet 1 Network ACL"
+            VpcId: !Ref Vpc
+    AssociatePubSub1toPubSub1NACL:
+        Type: "AWS::EC2::SubnetNetworkAclAssociation"
+        Properties:
+            SubnetId: !Ref PubSub1
+            NetworkAclId: !Ref PubSub1NACL
+    AllowToPrivSub2:
+        Type: "AWS::EC2::NetworkAclEntry"
+        Properties:
+            CidrBlock: !Ref PrivSub2CidrBlock
+            Egress: True
+            NetworkAclId: !Ref PubSub1NACL
+            Protocol: -1
+            RuleAction: "allow"
+            RuleNumber: 100
+    AllowToPrivSub1:
+        Type: "AWS::EC2::NetworkAclEntry"
+        Properties:
+            CidrBlock: !Ref PrivSub1CidrBlock
+            Egress: True
+            NetworkAclId: !Ref PubSub1NACL
+            Protocol: -1
+            RuleAction: "allow"
+            RuleNumber: 200
+    AllowFromPrivSub2:
+        Type: "AWS::EC2::NetworkAclEntry"
+        Properties:
+            CidrBlock: !Ref PrivSub2CidrBlock
+            Egress: False
+            NetworkAclId: !Ref PubSub1NACL
+            Protocol: -1
+            RuleAction: "allow"
+            RuleNumber: 100
+    AllowFromPrivSub1:
+        Type: "AWS::EC2::NetworkAclEntry"
+        Properties:
+            CidrBlock: !Ref PubSub1CidrBlock
+            Egress: False
+            NetworkAclId: !Ref PubSub1NACL
+            Protocol: -1
+            RuleAction: "allow"
+            RuleNumber: 200
+            
+    PubSub1RouteTable:
+        Type: "AWS::EC2::RouteTable"
+        Properties:
+            VpcId: !Ref Vpc
+            Tags:
+                - Key: "Name"
+                  Value: "Private Subnet 1 Route Table"
+    AssociatePubSub1toPubSub1RouteTable:
+        Type: "AWS::EC2::SubnetRouteTableAssociation"
+        Properties:
+            RouteTableId: !Ref PubSub1RouteTable
+            SubnetId: !Ref PubSub1
+    PubSub1DefRoute:
+        Type: "AWS::EC2::Route"
+        DependsOn: AttachInternetGWtoVpc
+        Properties:
+            DestinationCidrBlock: "0.0.0.0/0"
+            GatewayId: !Ref InternetGW
+            RouteTableId: !Ref PubSub1RouteTable
+    
