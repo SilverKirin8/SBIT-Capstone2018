@@ -1,0 +1,18 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+    This stack deploys and configures Active Directory domain controllers into an existing VPC environment. This stack makes use of the outputs from the 
+    "VPCEnvironmentForCapstone" stack. 
+    
+    
+    This stack will deploy the instances and, through the use of cfn-init/resource metadata, will install ADDS and 
+    configure the instance as a domain controller.
+    
+    At this point, I haven't decided if this stack will be static for demo purposes. If so, this stack will deploy a hard-coded pair of DCs, the first 
+    creating the forest and domain, and the second being joined and then promoted. 
+    If this stack is not static, I might create two similar stacks, one to create the domain and forest, and a second for all other instances that 
+    will be joined. I could also try to add conditions to the metadata putting both functions in the same stack. More research required to decide.
+    At this time, I will likely create the static stack for the sake of simplicity Iand the fact that I don't care about making the project look good 
+    anymore).
+Parameters:
+    Comment: Needed parameters - Domain, NetBIOS names, IPs(?), Admin Password, Admin User(?), SafeModePassword (same as admin pass?)
+Resources:
