@@ -51,7 +51,7 @@ def buildVPC():
     #vpcStackWaiter can be called to halt script execution until the specified stack is finished executing/building
     vpcStackWaiter = cloudFormationClient.get_waiter('stack_create_complete')
     
-    #Print extimated time to completion
+    #Print estimated time to completion
     print('\n' + SECTION_SEPARATOR)
     print('Building AWS Networking...')
     print('Estimated time to completion: ~2-5 min.')

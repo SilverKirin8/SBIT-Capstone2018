@@ -14,5 +14,88 @@ Description: >-
     At this time, I will likely create the static stack for the sake of simplicity Iand the fact that I don't care about making the project look good 
     anymore).
 Parameters:
-    Comment: Needed parameters - Domain, NetBIOS names, IPs(?), Admin Password, Admin User(?), SafeModePassword (same as admin pass?)
+    Comment: Needed parameters - Domain, NetBIOS names, IPs(?), Admin Password, Admin User(?), RestoreModePassword (same as admin pass?)
+    DCInstanceType:
+        Type: String
+        Default: "t2.micro"
+        Description: "The instance type for the Domain Controllers. Default: t2.micro"
+    DCImage:
+        Type: String
+        Default: "ami-05446e60"
+        Description: "The AMI ID to be used when creating DCs. Hopefully, I'll have time to find more AMIs for other regions and can use mappings instead."
+    KeyPair:
+        Type: String
+        Description: "The name of the key pair used to connect to instances. Without this, instances are inaccessible to remote administration."
+    DC1NetBIOSName:
+        Type: String
+        Description: "The NetBIOS name for the first Domain Controller. Requires user to come up with naming convention. May have default for ease of testing."
+    
 Resources:
+    DC1:
+        Type: "AWS::EC2::Instance"
+        Metadata:
+            "AWS::CloudFormation::Init":
+                configSets:
+                    config:
+                        - setup
+                        - rename
+                        - installADDS
+                        - configureSites
+                        - finalize
+                setup:
+                    files:
+                        'c:\cfn\cfn-hup.conf':
+                          content: !Join 
+                            - ''
+                            - - |
+                                [main]
+                              - stack=
+                              - !Ref 'AWS::StackName'
+                              - |+
+    
+                              - region=
+                              - !Ref 'AWS::Region'
+                              - |+
+    
+                        'c:\cfn\hooks.d\cfn-auto-reloader.conf':
+                          content: !Join 
+                            - ''
+                            - - |
+                                [cfn-auto-reloader-hook]
+                              - |
+                                triggers=post.update
+                              - >
+                                path=Resources.DC1.Metadata.AWS::CloudFormation::Init
+                              - 'action=cfn-init.exe -v -c config -s '
+                              - !Ref 'AWS::StackId'
+                              - ' -r DC1'
+                              - ' --region '
+                              - !Ref 'AWS::Region'
+                              - |+
+                        'c:\cfn\scripts\Set-StaticIP.ps1':
+                          content: !Join 
+                            - ''
+                            - - $netip = Get-NetIPConfiguration;
+                              - >-
+                                $ipconfig = Get-NetIPAddress | ?{$_.IpAddress -eq
+                                $netip.IPv4Address.IpAddress};
+                              - Get-NetAdapter | Set-NetIPInterface -DHCP Disabled;
+                              - >-
+                                Get-NetAdapter | New-NetIPAddress -AddressFamily IPv4
+                                -IPAddress $netip.IPv4Address.IpAddress -PrefixLength
+                                $ipconfig.PrefixLength -DefaultGateway
+                                $netip.IPv4DefaultGateway.NextHop;
+                              - >-
+                                Get-NetAdapter | Set-DnsClientServerAddress -ServerAddresses
+                                $netip.DNSServer.ServerAddresses;
+                              - |+
+        Properties:
+            ImageId: !Ref DCImage
+            InstanceType: !Ref DCInstanceType
+            KeyName: !Ref KeyPair
+            SecurityGroupIds:
+                - !Ref DC1SecurityGroup
+            SubnetId: !Ref PrivSub1 "This may change based on using outputs from other stacks or using a single stack. Currently assumes a single stack."
+            Tags:
+                - Key: "Name"
+                  Value: !Ref DC1NetBIOSName
