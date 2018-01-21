@@ -1,0 +1,1101 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  This stack deploys and configures Active Directory domain controllers into an
+  existing VPC environment. This stack makes use of the outputs from the 
+  "VPCEnvironmentForCapstone" stack. 
+
+  This stack will deploy two instances and, through the use of cfn-init/resource
+  metadata, will install ADDS and  configure the instances as domain controllers.
+  These instances will fulfill the requirement for at least two DCs in the 
+  environment. Any further DCs will be created by the "AdditionalDCStackForCapstone"
+  stack.
+Parameters:
+  NetworkStackName:
+    Type: String
+    Description: 'The name of the stack that created the AWS networking. Used to import networking stack outputs.'
+    Default: 'CapstoneNetworkStack'
+  DomainDNSName:
+    Type: String
+    Description: 'The domain name as it would be entered into a browser. (Ex. "example.com")'
+  DomainNetBIOSName:
+    Type: String
+    Description: >-
+        The NetBIOS name of the domain, typically the same as the domain DNS name, but with the 
+        root domain removed. (Ex. "EXAMPLE")
+  DomainAdminUser:
+    Type: String
+    Description: >-
+        The user name of a user to be added and given Domain Admin privileges.
+        This user is separate from the default Administrator account.
+  DomainAdminPassword:
+    Type: String
+    Description: 'The account password for the domain admin user.'
+  DCInstanceType:
+    Type: String
+    Default: t2.micro
+    Description: 'The instance type for the Domain Controllers. Default: t2.micro'
+  DCImage:
+    Type: String
+    Default: 'ami-05446e60'
+    Description: >-
+      The AMI ID to be used when creating DCs. Hopefully, I'll have time to find
+      more AMIs for other regions and can use mappings instead.
+  KeyPair:
+    Type: String
+    Description: >-
+      The name of the key pair used to connect to instances. Without this,
+      instances are inaccessible to remote administration.
+  DC1PrivIP:
+    Type: String
+    Description: 'The private IP to be used for DC1.'
+  DC1NetBIOSName:
+    Type: String
+    Description: 'The NetBIOS name for the first Domain Controller.'
+  DC2PrivIP:
+    Type: String
+    Description: 'The private IP to be used for DC2.'
+  DC2NetBIOSName:
+    Type: String
+    Description: 'The NetBIOS name for the second Domain Controller.'
+Resources:
+  DC1:
+    Type: 'AWS::EC2::Instance'
+    Metadata:
+      'AWS::CloudFormation::Init':
+        configSets:
+          config:
+            - setup
+            - rename
+            - installADDS
+            - configureSites
+            - finalize
+        setup:
+          files:
+            'c:\cfn\cfn-hup.conf':
+              content: !Join 
+                - ''
+                - - |
+                    [main]
+                  - stack=
+                  - !Ref 'AWS::StackName'
+                  - |+
+
+                  - region=
+                  - !Ref 'AWS::Region'
+                  - ''
+            'c:\cfn\hooks.d\cfn-auto-reloader.conf':
+              content: !Join 
+                - ''
+                - - |
+                    [cfn-auto-reloader-hook]
+                  - |
+                    triggers=post.update
+                  - |
+                    path=Resources.DC1.Metadata.AWS::CloudFormation::Init
+                  - 'action=cfn-init.exe -v -c config -s '
+                  - !Ref 'AWS::StackId'
+                  - ' -r DC1'
+                  - ' --region '
+                  - !Ref 'AWS::Region'
+                  - ''
+            'c:\cfn\scripts\Set-StaticIP.ps1':
+              content: !Join 
+                - ''
+                - - $netip = Get-NetIPConfiguration;
+                  - >-
+                    $ipconfig = Get-NetIPAddress | ?{$_.IpAddress -eq
+                    $netip.IPv4Address.IpAddress};
+                  - Get-NetAdapter | Set-NetIPInterface -DHCP Disabled;
+                  - >-
+                    Get-NetAdapter | New-NetIPAddress -AddressFamily IPv4
+                    -IPAddress $netip.IPv4Address.IpAddress -PrefixLength
+                    $ipconfig.PrefixLength -DefaultGateway
+                    $netip.IPv4DefaultGateway.NextHop;
+                  - >-
+                    Get-NetAdapter | Set-DnsClientServerAddress -ServerAddresses
+                    $netip.DNSServer.ServerAddresses;
+                  - ''
+            'c:\cfn\scripts\ConvertTo-EnterpriseAdmin.ps1':
+              content: !Join 
+                - ''
+                - - |
+                    [CmdletBinding()]
+                  - |
+                    param(
+                  - |
+                    '   [string[]]'
+                  - |
+                    [Parameter(Position=0)]
+                  - >
+                    '   $Groups = @('domain admins','schema admins','enterprise
+                    admins'),'
+                  - |
+                    '   [string[]]'
+                  - |
+                    '   [Parameter(Mandatory=$true, Position=1)]'
+                  - |
+                    '   $Members'
+                  - |
+                    )
+                  - ''
+                  - |
+                    $Groups | ForEach-Object{
+                  - |
+                    '   Add-ADGroupMember -Identity $_ -Members $Members'
+                  - |
+                    }
+          services:
+            windows:
+              cfn-hup:
+                enabled: 'true'
+                ensureRunning: 'true'
+                files:
+                  - 'c:\cfn\cfn-hup.conf'
+                  - 'c:\cfn\hooks.d\cfn-auto-reloader.conf'
+          commands:
+            disable-windows-firewall:
+              command: !Join 
+                - ''
+                - - >-
+                    powershell.exe -Command "Get-NetFirewallProfile |
+                    Set-NetFirewallProfile -Enabled False"
+              waitAfterCompletion: '0'
+        rename:
+          commands:
+            set-static-ip:
+              command: !Join 
+                - ''
+                - - >-
+                    powershell.exe -ExecutionPolicy RemoteSigned -Command
+                    c:\cfn\scripts\Set-StaticIP.ps1
+              waitAfterCompletion: '45'
+            powershell-RenameComputer:
+              command: !Join 
+                - ''
+                - - 'powershell.exe Rename-Computer -NewName '
+                  - !Ref DC1NetBIOSName
+                  - ' -Restart'
+              waitAfterCompletion: forever
+        installADDS:
+          commands:
+            install-Domain-Services:
+              command: !Join 
+                - ''
+                - - >-
+                    powershell.exe -Command "Install-WindowsFeature
+                    AD-Domain-Services, rsat-adds -IncludeAllSubFeature"
+              waitAfterCompletion: '0'
+            install-forest:
+              command: !Join 
+                - ''
+                - - 'powershell.exe -Command "Install-ADDSForest -DomainName '
+                  - !Ref DomainDNSName
+                  - ' -SafeModeAdministratorPassword (ConvertTo-SecureString '
+                  - ''''
+                  - !Ref DomainAdminPassword
+                  - ''''
+                  - ' -AsPlainText -Force) -DomainNetbiosName '
+                  - !Ref DomainNetBIOSName
+                  - ' -Confirm:$false -Force"'
+              waitAfterCompletion: forever
+            restart-Netlogon-service:
+              command: !Join
+                - ''
+                - - powershell.exe -Command Restart-Service Netlogon -EA 0
+              waitAfterCompletion: '180'
+            create-new-user:
+              command: !Join
+                - ''
+                - - 'powershell.exe -Command "New-ADUser -Name '
+                  - !Ref DomainAdminUser
+                  - ' -UserPrincipalName '
+                  - !Ref DomainAdminUser
+                  - ' -AccountPassword (ConvertTo-SecureString '
+                  - ''''
+                  - !Ref DomainAdminPassword
+                  - ''''
+                  - ' -AsPlainText -Force) -Enabled $true -PasswordNeverExpires $true"'
+              waitAfterCompletion: '0'
+            make-user-domain-admin:
+              command: !Join
+                - ''
+                - - >-
+                    powershell.exe -ExecutionPolicy RemoteSigned -Command
+                    c:\cfn\scripts\ConvertTo-EnterpriseAdmin.ps1 -Members
+                  - !Ref DomainAdminUser
+              waitAfterCompletion: '0'
+        configureSites:
+          commands:
+            rename-default-site:
+              command: !Join
+                - ''
+                - - 'powershell.exe '
+                  - '"'
+                  - >-
+                    Get-ADObject -SearchBase 
+                    (Get-ADRootDSE).ConfigurationNamingContext -filter {Name -eq
+                    'Default-First-Site-Name'} | Rename-ADObject -NewName AZ1
+                  - '"'
+              waitAfterCompletion: '0'
+            create-site-2:
+              command: !Join
+                - ''
+                - - powershell.exe -Command "New-ADReplicationSite AZ2"
+              waitAfterCompletion: '0'
+            create-public-subnet-1:
+              command: !Join
+                - ''
+                - - 'powershell.exe -Command "New-ADReplicationSubnet -Name '
+                  - Fn::ImportValue:
+                      !Sub '${NetworkStackName}-PubSub1Cidr'
+                  - ' -Site AZ1"'
+              waitAfterCompletion: '0'
+            create-private-subnet-1:
+              command: !Join
+                - ''
+                - - 'powershell.exe -Command "New-ADReplicationSubnet -Name '
+                  - Fn::ImportValue:
+                      !Sub '${NetworkStackName}-PrivSub1Cidr'
+                  - ' -Site AZ1"'
+              waitAfterCompletion: '0'
+            create-private-subnet-2:
+              command: !Join
+                - ''
+                - - 'powershell.exe -Command "New-ADReplicationSubnet -Name '
+                  - Fn::ImportValue:
+                      !Sub '${NetworkStackName}-PrivSub2Cidr'
+                  - ' -Site AZ2"'
+              waitAfterCompletion: '0'
+            set-replication-site-link:
+              command: !Join
+                - ''
+                - - powershell.exe -Command "
+                  - >-
+                    Get-ADReplicationSiteLink -Filter * |
+                    Set-ADReplicationSiteLink -SitesIncluded @{add='AZ2'}
+                    -ReplicationFrequencyInMinutes 15"
+              waitAfterCompletion: '0'
+        finalize:
+          commands:
+            signal-success:
+              command: !Join
+                - ''
+                - - cfn-signal.exe -e 0 "
+                  - !Ref DC1WaitHandle
+                  - '"'
+    Properties:
+      ImageId: !Ref DCImage
+      InstanceType: !Ref DCInstanceType
+      KeyName: !Ref KeyPair
+      SecurityGroupIds:
+        - !Ref DC1SecurityGroup
+      SubnetId: 
+        Fn::ImportValue:
+          !Sub '${NetworkStackName}-PrivSub1Id'
+      Tags:
+        - Key: Name
+          Value: !Ref DC1NetBIOSName
+      UserData: !Base64
+        Fn::Join:
+          - ''
+          - - |
+              <script>
+            - 'cfn-init.exe -v -c config -s '
+            - !Ref 'AWS::StackId'
+            - ' -r DC1 --region '
+            - !Ref 'AWS::Region'
+            - |+
+            - |
+              </script>
+  DC2:
+    Type: 'AWS::EC2::Instance'
+    Metadata:
+      'AWS::CloudFormation::Init':
+        configSets:
+          config:
+            - setup
+            - rename
+            - join
+            - addDC
+            - finalize
+        setup:
+          files:
+            'c:\cfn\cfn-hup.conf':
+              content: !Join 
+                - ''
+                - - |
+                    [main]
+                  - stack=
+                  - !Ref 'AWS::StackName'
+                  - |+
+
+                  - region=
+                  - !Ref 'AWS::Region'
+                  - ''
+            'c:\cfn\hooks.d\cfn-auto-reloader.conf':
+              content: !Join 
+                - ''
+                - - |
+                    [cfn-auto-reloader-hook]
+                  - |
+                    triggers=post.update
+                  - |
+                    path=Resources.DC2.Metadata.AWS::CloudFormation::Init
+                  - 'action=cfn-init.exe -v -c config -s '
+                  - !Ref 'AWS::StackId'
+                  - ' -r DC2'
+                  - ' --region '
+                  - !Ref 'AWS::Region'
+                  - ''
+            'c:\cfn\scripts\Set-StaticIP.ps1':
+              content: !Join 
+                - ''
+                - - $netip = Get-NetIPConfiguration;
+                  - >-
+                    $ipconfig = Get-NetIPAddress | ?{$_.IpAddress -eq
+                    $netip.IPv4Address.IpAddress};
+                  - Get-NetAdapter | Set-NetIPInterface -DHCP Disabled;
+                  - >-
+                    Get-NetAdapter | New-NetIPAddress -AddressFamily IPv4
+                    -IPAddress $netip.IPv4Address.IpAddress -PrefixLength
+                    $ipconfig.PrefixLength -DefaultGateway
+                    $netip.IPv4DefaultGateway.NextHop;
+                  - >-
+                    Get-NetAdapter | Set-DnsClientServerAddress
+                    -ServerAddresses 
+                  - !Ref DC1PrivIP
+                  - |+
+          services:
+            windows:
+              cfn-hup:
+                enabled: 'true'
+                ensureRunning: 'true'
+                files:
+                  - 'c:\cfn\cfn-hup.conf'
+                  - 'c:\cfn\hooks.d\cfn-auto-reloader.conf'
+          commands:
+            disable-windows-firewall:
+              command: !Join 
+                - ''
+                - - >-
+                    powershell.exe -Command "Get-NetFirewallProfile |
+                    Set-NetFirewallProfile -Enabled False"
+              waitAfterCompletion: '0'
+        rename:
+          commands:
+            set-static-ip:
+              command: !Join 
+                - ''
+                - - >-
+                    powershell.exe -ExecutionPolicy RemoteSigned -Command
+                    c:\cfn\scripts\Set-StaticIP.ps1
+              waitAfterCompletion: '45'
+            powershell-RenameComputer:
+              command: !Join 
+                - ''
+                - - 'powershell.exe Rename-Computer -NewName '
+                  - !Ref DC2NetBIOSName
+                  - ' -Restart'
+              waitAfterCompletion: forever
+        join:
+          commands:
+            join-domain:
+              command: !Join
+                - ''
+                - - powershell.exe -Command "
+                  - 'Add-Computer -DomainName '
+                  - !Ref DomainDNSName
+                  - ' -Credential '
+                  - (New-Object System.Management.Automation.PSCredential('
+                  - !Ref DomainNetBIOSName
+                  - \
+                  - !Ref DomainAdminUser
+                  - ''','
+                  - '(ConvertTo-SecureString '
+                  - ''''
+                  - !Ref DomainAdminPassword
+                  - ''''
+                  - ' -AsPlainText -Force))) -Restart'
+              waitAfterCompletion: forever
+        addDC:
+          commands:
+            install-domain-services:
+              command: !Join
+                - ''
+                - - >-
+                    powershell.exe -Command 'Install-WindowsFeature
+                    AD-Domain-Services, rsat-adds -IncludeAllSubFeature"
+              waitAfterCompletion: '0'
+            add-dc:
+              command: !Join
+                - ''
+                - - powershell.exe -Command "
+                  - 'Install-ADDSDomainController -InstallDns -DomainName '
+                  - !Ref DomainDNSName
+                  - ' -Credential '
+                  - (New-Object System.Management.Automation.PSCredential('
+                  - !Ref DomainNetBIOSName
+                  - \
+                  - !Ref DomainAdminUser
+                  - ''','
+                  - '(ConvertTo-SecureString '
+                  - ''''
+                  - !Ref DomainAdminPassword
+                  - ''''
+                  - ' -AsPlainText -Force))) '
+                  - '-SafeModeAdministratorPassword (ConvertTo-SecureString '
+                  - ''''
+                  - !Ref DomainAdminPassword
+                  - ''''
+                  - ' -AsPlainText -Force) -Confirm:$false -Force"'
+              waitAfterCompletion: forever
+        finalize:
+          commands:
+            update-dns-servers-dc2:
+              command: !Join
+                - ''
+                - - powershell.exe -Command "
+                  - >-
+                    Get-NetAdapter | Set-DnsClientServerAddress
+                    -ServerAddresses 
+                  - !Ref DC1PrivIP
+                  - ','
+                  - !Ref DC2PrivIP
+                  - '"'
+              waitAfterCompletion: '0'
+            update-dns-servers-dc1:
+              command: !Join
+                - ''
+                - - 'powershell.exe -Command '
+                  - '"Invoke-Command -Scriptblock{ '
+                  - >-
+                    Get-NetAdapter | Set-DnsClientServerAddress
+                    -ServerAddresses
+                  - !Ref DC1PrivIP
+                  - ','
+                  - !Ref DC2PrivIP
+                  - ' } -ComputerName '
+                  - !Ref DC1NetBIOSName
+                  - ' -Credential '
+                  - (New-Object System.Management.Automation.PSCredential('
+                  - !Ref DomainNetBIOSName
+                  - \
+                  - !Ref DomainAdminUser
+                  - ''','
+                  - '(ConvertTo-SecureString '
+                  - ''''
+                  - !Ref DomainAdminPassword
+                  - ''''
+                  - ' -AsPlainText -Force)))"'
+              waitAfterCompletion: '0'
+            signal-success:
+              command: !Join
+                - ''
+                - - cfn-signal.exe -e 0 "
+                  - !Ref DC2WaitHandle
+                  - '"'
+    Properties:
+      ImageId: !Ref DCImage
+      InstanceType: !Ref DCInstanceType
+      KeyName: !Ref KeyPair
+      SecurityGroupIds:
+        - !Ref DC2SecurityGroup
+      SubnetId: 
+        Fn::ImportValue:
+          !Sub '${NetworkStackName}-PrivSub2Id'
+      Tags:
+        - Key: Name
+          Value: !Ref DC2NetBIOSName
+      UserData: !Base64
+        Fn::Join:
+          - ''
+          - - |
+              <script>
+            - 'cfn-init.exe -v -c config -s '
+            - !Ref 'AWS::StackId'
+            - ' -r DC2 --region '
+            - !Ref 'AWS::Region'
+            - |+
+            - |
+              </script>
+  DC1WaitCondition:
+    Type: 'AWS::CloudFormation::WaitCondition'
+    DependsOn: DC1
+    Properties:
+      Handle: !Ref DC1WaitHandle
+      Timeout: '3600'
+  DC1WaitHandle:
+    Type: 'AWS::CloudFormation::WaitConditionHandle'
+  DC2WaitCondition:
+    Type: 'AWS::CloudFormation::WaitCondition'
+    DependsOn: DC2
+    Properties:
+      Handle: !Ref DC2WaitHandle
+      Timeout: '3600'
+  DC2WaitHandle:
+    Type: 'AWS::CloudFormation::WaitConditionHandle'
+  DC1SecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupName: 'DC1 Security Group'
+      GroupDescription: 'Security Group for Domain Controller 1'
+      VpcId: 
+        Fn::ImportValue:
+          !Sub '${NetworkStackName}-VPCID'
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '5985'
+          ToPort: '5985'
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-VpcCidr'
+        - IpProtocol: tcp
+          FromPort: '80'
+          ToPort: '80'
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-VpcCidr'
+        - IpProtocol: udp
+          FromPort: '123'
+          ToPort: '123'
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-PrivSub2Cidr'
+        - IpProtocol: tcp
+          FromPort: '135'
+          ToPort: '135'
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-PrivSub2Cidr'
+        - IpProtocol: tcp
+          FromPort: '9389'
+          ToPort: '9389'
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-PrivSub2Cidr'
+        - IpProtocol: udp
+          FromPort: '138'
+          ToPort: '138'
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-PrivSub2Cidr'
+        - IpProtocol: tcp
+          FromPort: '445'
+          ToPort: '445'
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-PrivSub2Cidr'
+        - IpProtocol: udp
+          FromPort: '445'
+          ToPort: '445'
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-PrivSub2Cidr'
+        - IpProtocol: udp
+          FromPort: '464'
+          ToPort: '464'
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-PrivSub2Cidr'
+        - IpProtocol: tcp
+          FromPort: '464'
+          ToPort: '464'
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-PrivSub2Cidr'
+        - IpProtocol: tcp
+          FromPort: '49152'
+          ToPort: '65535'
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-PrivSub2Cidr'
+        - IpProtocol: udp
+          FromPort: '49152'
+          ToPort: '65535'
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-PrivSub2Cidr'
+        - IpProtocol: tcp
+          FromPort: '389'
+          ToPort: '389'
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-PrivSub2Cidr'
+        - IpProtocol: udp
+          FromPort: '389'
+          ToPort: '389'
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-PrivSub2Cidr'
+        - IpProtocol: tcp
+          FromPort: '636'
+          ToPort: '636'
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-PrivSub2Cidr'
+        - IpProtocol: tcp
+          FromPort: '3268'
+          ToPort: '3268'
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-PrivSub2Cidr'
+        - IpProtocol: tcp
+          FromPort: '3269'
+          ToPort: '3269'
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-PrivSub2Cidr'
+        - IpProtocol: tcp
+          FromPort: '53'
+          ToPort: '53'
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-VpcCidr'
+        - IpProtocol: udp
+          FromPort: '53'
+          ToPort: '53'
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-VpcCidr'
+        - IpProtocol: tcp
+          FromPort: '9389'
+          ToPort: '9389'
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-PrivSub2Cidr'
+        - IpProtocol: tcp
+          FromPort: '88'
+          ToPort: '88'
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-PrivSub2Cidr'
+        - IpProtocol: udp
+          FromPort: '88'
+          ToPort: '88'
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-PrivSub2Cidr'
+        - IpProtocol: udp
+          FromPort: '5355'
+          ToPort: '5355'
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-PrivSub2Cidr'
+        - IpProtocol: udp
+          FromPort: '137'
+          ToPort: '137'
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-PrivSub2Cidr'
+        - IpProtocol: tcp
+          FromPort: '139'
+          ToPort: '139'
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-PrivSub2Cidr'
+        - IpProtocol: tcp
+          FromPort: '5722'
+          ToPort: '5722'
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-PrivSub2Cidr'
+        - IpProtocol: udp
+          FromPort: '123'
+          ToPort: '123'
+          SourceSecurityGroupId: !Ref DomainMemberSG
+        - IpProtocol: tcp
+          FromPort: '135'
+          ToPort: '135'
+          SourceSecurityGroupId: !Ref DomainMemberSG
+        - IpProtocol: tcp
+          FromPort: '9389'
+          ToPort: '9389'
+          SourceSecurityGroupId: !Ref DomainMemberSG
+        - IpProtocol: udp
+          FromPort: '138'
+          ToPort: '138'
+          SourceSecurityGroupId: !Ref DomainMemberSG
+        - IpProtocol: tcp
+          FromPort: '445'
+          ToPort: '445'
+          SourceSecurityGroupId: !Ref DomainMemberSG
+        - IpProtocol: udp
+          FromPort: '445'
+          ToPort: '445'
+          SourceSecurityGroupId: !Ref DomainMemberSG
+        - IpProtocol: udp
+          FromPort: '464'
+          ToPort: '464'
+          SourceSecurityGroupId: !Ref DomainMemberSG
+        - IpProtocol: tcp
+          FromPort: '464'
+          ToPort: '464'
+          SourceSecurityGroupId: !Ref DomainMemberSG
+        - IpProtocol: tcp
+          FromPort: '49152'
+          ToPort: '65535'
+          SourceSecurityGroupId: !Ref DomainMemberSG
+        - IpProtocol: udp
+          FromPort: '49152'
+          ToPort: '65535'
+          SourceSecurityGroupId: !Ref DomainMemberSG
+        - IpProtocol: tcp
+          FromPort: '389'
+          ToPort: '389'
+          SourceSecurityGroupId: !Ref DomainMemberSG
+        - IpProtocol: udp
+          FromPort: '389'
+          ToPort: '389'
+          SourceSecurityGroupId: !Ref DomainMemberSG
+        - IpProtocol: tcp
+          FromPort: '636'
+          ToPort: '636'
+          SourceSecurityGroupId: !Ref DomainMemberSG
+        - IpProtocol: tcp
+          FromPort: '3268'
+          ToPort: '3268'
+          SourceSecurityGroupId: !Ref DomainMemberSG
+        - IpProtocol: tcp
+          FromPort: '3269'
+          ToPort: '3269'
+          SourceSecurityGroupId: !Ref DomainMemberSG
+        - IpProtocol: tcp
+          FromPort: '88'
+          ToPort: '88'
+          SourceSecurityGroupId: !Ref DomainMemberSG
+        - IpProtocol: udp
+          FromPort: '88'
+          ToPort: '88'
+          SourceSecurityGroupId: !Ref DomainMemberSG
+        - IpProtocol: tcp
+          FromPort: '3389'
+          ToPort: '3389'
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-PubSub1Cidr'
+        - IpProtocol: icmp
+          FromPort: '-1'
+          ToPort: '-1'
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-PubSub1Cidr'
+  DC2SecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupName: 'DC2 Security Group'
+      GroupDescription: 'Security Group for Domain Controller 2'
+      VpcId: 
+        Fn::ImportValue:
+          !Sub '${NetworkStackName}-VPCID'
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '5985'
+          ToPort: '5985'
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-VpcCidr'
+        - IpProtocol: tcp
+          FromPort: '80'
+          ToPort: '80'
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-VpcCidr'
+        - IpProtocol: udp
+          FromPort: '123'
+          ToPort: '123'
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-PrivSub1Cidr'
+        - IpProtocol: tcp
+          FromPort: '135'
+          ToPort: '135'
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-PrivSub1Cidr'
+        - IpProtocol: tcp
+          FromPort: '9389'
+          ToPort: '9389'
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-PrivSub1Cidr'
+        - IpProtocol: udp
+          FromPort: '138'
+          ToPort: '138'
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-PrivSub1Cidr'
+        - IpProtocol: tcp
+          FromPort: '445'
+          ToPort: '445'
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-PrivSub1Cidr'
+        - IpProtocol: udp
+          FromPort: '445'
+          ToPort: '445'
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-PrivSub1Cidr'
+        - IpProtocol: udp
+          FromPort: '464'
+          ToPort: '464'
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-PrivSub1Cidr'
+        - IpProtocol: tcp
+          FromPort: '464'
+          ToPort: '464'
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-PrivSub1Cidr'
+        - IpProtocol: tcp
+          FromPort: '49152'
+          ToPort: '65535'
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-PrivSub1Cidr'
+        - IpProtocol: udp
+          FromPort: '49152'
+          ToPort: '65535'
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-PrivSub1Cidr'
+        - IpProtocol: tcp
+          FromPort: '389'
+          ToPort: '389'
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-PrivSub1Cidr'
+        - IpProtocol: udp
+          FromPort: '389'
+          ToPort: '389'
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-PrivSub1Cidr'
+        - IpProtocol: tcp
+          FromPort: '636'
+          ToPort: '636'
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-PrivSub1Cidr'
+        - IpProtocol: tcp
+          FromPort: '3268'
+          ToPort: '3268'
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-PrivSub1Cidr'
+        - IpProtocol: tcp
+          FromPort: '3269'
+          ToPort: '3269'
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-PrivSub1Cidr'
+        - IpProtocol: tcp
+          FromPort: '53'
+          ToPort: '53'
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-VpcCidr'
+        - IpProtocol: udp
+          FromPort: '53'
+          ToPort: '53'
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-VpcCidr'
+        - IpProtocol: tcp
+          FromPort: '9389'
+          ToPort: '9389'
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-PrivSub1Cidr'
+        - IpProtocol: tcp
+          FromPort: '88'
+          ToPort: '88'
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-PrivSub1Cidr'
+        - IpProtocol: udp
+          FromPort: '88'
+          ToPort: '88'
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-PrivSub1Cidr'
+        - IpProtocol: udp
+          FromPort: '5355'
+          ToPort: '5355'
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-PrivSub1Cidr'
+        - IpProtocol: udp
+          FromPort: '137'
+          ToPort: '137'
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-PrivSub1Cidr'
+        - IpProtocol: tcp
+          FromPort: '139'
+          ToPort: '139'
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-PrivSub1Cidr'
+        - IpProtocol: tcp
+          FromPort: '5722'
+          ToPort: '5722'
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-PrivSub1Cidr'
+        - IpProtocol: udp
+          FromPort: '123'
+          ToPort: '123'
+          SourceSecurityGroupId: !Ref DomainMemberSG
+        - IpProtocol: tcp
+          FromPort: '135'
+          ToPort: '135'
+          SourceSecurityGroupId: !Ref DomainMemberSG
+        - IpProtocol: tcp
+          FromPort: '9389'
+          ToPort: '9389'
+          SourceSecurityGroupId: !Ref DomainMemberSG
+        - IpProtocol: udp
+          FromPort: '138'
+          ToPort: '138'
+          SourceSecurityGroupId: !Ref DomainMemberSG
+        - IpProtocol: tcp
+          FromPort: '445'
+          ToPort: '445'
+          SourceSecurityGroupId: !Ref DomainMemberSG
+        - IpProtocol: udp
+          FromPort: '445'
+          ToPort: '445'
+          SourceSecurityGroupId: !Ref DomainMemberSG
+        - IpProtocol: udp
+          FromPort: '464'
+          ToPort: '464'
+          SourceSecurityGroupId: !Ref DomainMemberSG
+        - IpProtocol: tcp
+          FromPort: '464'
+          ToPort: '464'
+          SourceSecurityGroupId: !Ref DomainMemberSG
+        - IpProtocol: tcp
+          FromPort: '49152'
+          ToPort: '65535'
+          SourceSecurityGroupId: !Ref DomainMemberSG
+        - IpProtocol: udp
+          FromPort: '49152'
+          ToPort: '65535'
+          SourceSecurityGroupId: !Ref DomainMemberSG
+        - IpProtocol: tcp
+          FromPort: '389'
+          ToPort: '389'
+          SourceSecurityGroupId: !Ref DomainMemberSG
+        - IpProtocol: udp
+          FromPort: '389'
+          ToPort: '389'
+          SourceSecurityGroupId: !Ref DomainMemberSG
+        - IpProtocol: tcp
+          FromPort: '636'
+          ToPort: '636'
+          SourceSecurityGroupId: !Ref DomainMemberSG
+        - IpProtocol: tcp
+          FromPort: '3268'
+          ToPort: '3268'
+          SourceSecurityGroupId: !Ref DomainMemberSG
+        - IpProtocol: tcp
+          FromPort: '3269'
+          ToPort: '3269'
+          SourceSecurityGroupId: !Ref DomainMemberSG
+        - IpProtocol: tcp
+          FromPort: '88'
+          ToPort: '88'
+          SourceSecurityGroupId: !Ref DomainMemberSG
+        - IpProtocol: udp
+          FromPort: '88'
+          ToPort: '88'
+          SourceSecurityGroupId: !Ref DomainMemberSG
+        - IpProtocol: tcp
+          FromPort: '3389'
+          ToPort: '3389'
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-PubSub1Cidr'
+        - IpProtocol: icmp
+          FromPort: '-1'
+          ToPort: '-1'
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-PubSub1Cidr'
+  DomainMemberSG:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupName: 'Domain Member Security Group'
+      GroupDescription: 'Security Group for Domain Member Computers'
+      VpcId: 
+        Fn::ImportValue:
+          !Sub '${NetworkStackName}-VPCID'
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '5985'
+          ToPort: '5985'
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-PrivSub1Cidr'
+        - IpProtocol: tcp
+          FromPort: '53'
+          ToPort: '53'
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-PrivSub1Cidr'
+        - IpProtocol: udp
+          FromPort: '53'
+          ToPort: '53'
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-PrivSub1Cidr'
+        - IpProtocol: tcp
+          FromPort: '49152'
+          ToPort: '65535'
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-PrivSub1Cidr'
+        - IpProtocol: udp
+          FromPort: '49152'
+          ToPort: '65535'
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-PrivSub1Cidr'
+        - IpProtocol: tcp
+          FromPort: '5985'
+          ToPort: '5985'
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-PrivSub2Cidr'
+        - IpProtocol: tcp
+          FromPort: '53'
+          ToPort: '53'
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-PrivSub2Cidr'
+        - IpProtocol: udp
+          FromPort: '53'
+          ToPort: '53'
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-PrivSub2Cidr'
+        - IpProtocol: tcp
+          FromPort: '49152'
+          ToPort: '65535'
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-PrivSub2Cidr'
+        - IpProtocol: udp
+          FromPort: '49152'
+          ToPort: '65535'
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-PrivSub2Cidr'
+        - IpProtocol: tcp
+          FromPort: '3389'
+          ToPort: '3389'
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-PubSub1Cidr'

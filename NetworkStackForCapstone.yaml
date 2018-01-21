@@ -257,3 +257,44 @@ Resources:
       DestinationCidrBlock: 0.0.0.0/0
       GatewayId: !Ref InternetGW
       RouteTableId: !Ref PubSub1RouteTable
+Outputs:
+  VPCID:
+    Description: 'The ID of the VPC object created in "Resources".'
+    Value: !Ref Vpc
+    Export:
+      Name: !Sub "${AWS::StackName}-VPCID"
+  VpcCidr:
+    Description: 'The CIDR block assigned to the VPC.'
+    Value: !Ref VpcCidrBlock
+    Export:
+      Name: !Sub "${AWS::StackName}-VpcCidr"
+  PubSub1ID:
+    Description: 'The ID of Public Subnet 1.'
+    Value: !Ref PubSub1
+    Export:
+      Name: !Sub "${AWS::StackName}-PubSub1Id"
+  PubSub1CidrBlock:
+    Description: 'The CIDR block assigned to Public Subnet 1.'
+    Value: !Ref PubSub1CidrBlock
+    Export:
+      Name: !Sub "${AWS::StackName}-PubSub1Cidr"
+  PrivSub1ID:
+    Description: 'The ID of Private Subnet 1.'
+    Value: !Ref PrivSub1
+    Export:
+      Name: !Sub "${AWS::StackName}-PrivSub1Id"
+  PrivSub1CidrBlock:
+    Description: 'The CIDR block assigned to Private Subnet 1.'
+    Value: !Ref PrivSub1CidrBlock
+    Export:
+      Name: !Sub "${AWS::StackName}-PrivSub1Cidr"
+  PrivSub2ID:
+    Description: 'The ID of Private Subnet 2.'
+    Value: !Ref PrivSub2
+    Export:
+      Name: !Sub "${AWS::StackName}-PrivSub2Id"
+  PrivSub2CidrBlock:
+    Description: 'The CIDR block assigned to Private Subnet 2.'
+    Value: !Ref PrivSub2CidrBlock
+    Export:
+      Name: !Sub "${AWS::StackName}-PrivSub2Cidr"
