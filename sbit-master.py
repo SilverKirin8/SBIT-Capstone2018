@@ -20,8 +20,7 @@ Var Names:
 vpcTemplateUrl
 '''
 vpcTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/2018021zsd-NetworkStackForCapstone.yamlanbhuxkjjjw'
-adTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/2018021S9M-ADStackForCapstone.yamlchu7ei7c0qh'
-
+adTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/2018021hN7-ADStackForCapstone.yamltdw7lmw63d9'
 ec2 = boto3.resource('ec2') #EC2 object allows connection and manipulation of AWS EC2 resource types
 cloudFormationClient = boto3.client('cloudformation') #CloudFormation client allows creation of AWS resources in a stack by using CloudFormation templates
 
@@ -65,8 +64,8 @@ def buildNetworkStack():
     print('Estimated time to completion: ~2 min.')
     
     vpcStackResponse = cloudFormationClient.create_stack(
-        StackName=networkStackName,
-        TemplateURL=vpcTemplateUrl,
+        StackName = networkStackName,
+        TemplateURL = vpcTemplateUrl,
     )
     vpcStackWaiter.wait(StackName=vpcStackResponse['StackId'])
 
@@ -83,46 +82,46 @@ def buildADStack(networkStackName, userDomainName, userDomainNetBIOSName, userDo
 	#print('Estimated time to completion: ~ min.')
 	
 	adStackResponse = cloudFormationClient.create_stack(
-		StackName=adStackName,
-		TemplateURL=adTemplateUrl,
+		StackName = adStackName,
+		TemplateURL = adTemplateUrl,
 		Parameters=[
 			{
-				'ParameterKey':'NetworkStackName',
-				'ParameterValue':networkStackName
+				'ParameterKey' : 'NetworkStackName',
+				'ParameterValue' : networkStackName
 			},
 			{
-				'ParameterKey':'DomainDNSName',
-				'ParameterValue':userDomainName
+				'ParameterKey' : 'DomainDNSName',
+				'ParameterValue' : userDomainName
 			},
 			{
-				'ParameterKey':'DomainNetBIOSName',
-				'ParameterValue':userDomainNetBIOSName
+				'ParameterKey' : 'DomainNetBIOSName',
+				'ParameterValue' : userDomainNetBIOSName
 			},
 			{
-				'ParameterKey':'DomainAdminUser',
-				'ParameterValue':userDomainAdminUsername
+				'ParameterKey' : 'DomainAdminUser',
+				'ParameterValue' : userDomainAdminUsername
 			},
 			{
-				'ParameterKey':'DomainAdminPassword',
-				'ParameterValue':userDomainAdminPassword
+				'ParameterKey' : 'DomainAdminPassword',
+				'ParameterValue' : userDomainAdminPassword
 			},
 			{
-				'ParameterKey':'RestoreModePassword',
-				'ParameterValue':userRestoreModePassword
+				'ParameterKey' : 'RestoreModePassword',
+				'ParameterValue' : userRestoreModePassword
 			},
 			{
-				'ParameterKey':'DCInstanceType',
-				'ParameterValue':userDcInstanceType
+				'ParameterKey' : 'DCInstanceType',
+				'ParameterValue' : userDcInstanceType
 			},
 			{
-				'ParameterKey':'KeyPair',
-				'ParameterValue':userKeyPair
+				'ParameterKey' : 'KeyPair',
+				'ParameterValue' : userKeyPair
 			},
 		],
 	)
-	adStackWaiter.wait(StackName=adStackResponse['StackId'])
-	
-	print('Active Directory... Build Complete!')
+	#adStackWaiter.wait(StackName=adStackResponse['StackId'])
+	print('Testing AD Install...')
+	#print('Active Directory... Build Complete!')
 
 #Prompt for and validate the Domain Name
 def getDomainName(message):

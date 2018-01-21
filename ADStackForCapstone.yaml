@@ -173,34 +173,7 @@ Resources:
                     $netip.DNSServer.ServerAddresses;
                   - ''
             'c:\cfn\scripts\ConvertTo-EnterpriseAdmin.ps1':
-              content: !Join 
-                - ''
-                - - |
-                    [CmdletBinding()]
-                  - |
-                    param(
-                  - |
-                    '   [string[]]'
-                  - |
-                    [Parameter(Position=0)]
-                  - >
-                    '   $Groups = @('domain admins','schema admins','enterprise
-                    admins'),'
-                  - |
-                    '   [string[]]'
-                  - |
-                    '   [Parameter(Mandatory=$true, Position=1)]'
-                  - |
-                    '   $Members'
-                  - |
-                    )
-                  - ''
-                  - |
-                    $Groups | ForEach-Object{
-                  - |
-                    '   Add-ADGroupMember -Identity $_ -Members $Members'
-                  - |
-                    }
+              source: 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/ConvertTo-EnterpriseAdmin.ps1'
           services:
             windows:
               cfn-hup:
