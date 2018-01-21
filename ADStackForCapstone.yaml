@@ -17,23 +17,46 @@ Parameters:
   DomainDNSName:
     Type: String
     Description: 'The domain name as it would be entered into a browser. (Ex. "example.com")'
+    AllowedPattern: '[a-zA-Z0-9\-]+\..+'
+    MaxLength: '25'
+    MinLength: '3'
   DomainNetBIOSName:
     Type: String
     Description: >-
         The NetBIOS name of the domain, typically the same as the domain DNS name, but with the 
         root domain removed. (Ex. "EXAMPLE")
+    AllowedPattern: '[a-zA-Z0-9\-]+'
+    MaxLength: '15'
+    MinLength: '1'
   DomainAdminUser:
     Type: String
     Description: >-
         The user name of a user to be added and given Domain Admin privileges.
         This user is separate from the default Administrator account.
+    AllowedPattern: '[a-zA-Z0-9]*'
+    MaxLength: '25'
+    MinLength: '3'
   DomainAdminPassword:
     Type: String
     Description: 'The account password for the domain admin user.'
+  RestoreModePassword:
+    Type: String
+    Description: 'Password for a separate Administrator account when DCs are in Restore Mode.'
   DCInstanceType:
     Type: String
-    Default: t2.micro
     Description: 'The instance type for the Domain Controllers. Default: t2.micro'
+    AllowedValues:
+      - t2.micro
+      - t2.small
+      - t2.medium
+      - t2.large
+      - t2.xlarge
+      - t2.2xlarge
+      - m5.large
+      - m5.xlarge
+      - m5.2xlarge
+      - m5.4xlarge
+    Default: t2.micro
   DCImage:
     Type: String
     Default: 'ami-05446e60'
@@ -41,23 +64,57 @@ Parameters:
       The AMI ID to be used when creating DCs. Hopefully, I'll have time to find
       more AMIs for other regions and can use mappings instead.
   KeyPair:
-    Type: String
+    Type: 'AWS::EC2::KeyPair::KeyName'
     Description: >-
       The name of the key pair used to connect to instances. Without this,
       instances are inaccessible to remote administration.
   DC1PrivIP:
     Type: String
     Description: 'The private IP to be used for DC1.'
+    AllowedPattern: >-
+      ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$
+    Default: 10.0.2.10
   DC1NetBIOSName:
     Type: String
     Description: 'The NetBIOS name for the first Domain Controller.'
+    AllowedPattern: '[a-zA-Z0-9\-]+'
+    Default: DC1
+    MaxLength: '15'
+    MinLength: '1'
   DC2PrivIP:
     Type: String
     Description: 'The private IP to be used for DC2.'
+    AllowedPattern: >-
+      ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$
+    Default: 10.0.4.10
   DC2NetBIOSName:
     Type: String
     Description: 'The NetBIOS name for the second Domain Controller.'
+    AllowedPattern: '[a-zA-Z0-9\-]+'
+    Default: DC2
+    MaxLength: '15'
+    MinLength: '1'
 Resources:
+  DHCPOptions:
+    Type: 'AWS::EC2::DHCPOptions'
+    DependsOn:
+      - DC1WaitCondition
+      - DC2WaitCondition
+    Properties:
+      DomainName: !Ref DomainDNSName
+      DomainNameServers:
+        - !Ref DC1PrivIP
+        - !Ref DC2PrivIP
+      Tags:
+        - Key: Domain
+          Value: !Ref DomainDNSName
+  AssociateVPCtoDHCPOptions:
+    Type: 'AWS::EC2::VPCDHCPOptionsAssociation'
+    Properties:
+      VpcId:
+        Fn::ImportValue:
+          !Sub '${NetworkStackName}-VPCID'
+      DhcpOptionsId: !Ref DHCPOptions
   DC1:
     Type: 'AWS::EC2::Instance'
     Metadata:

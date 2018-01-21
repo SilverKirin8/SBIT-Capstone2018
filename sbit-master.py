@@ -9,6 +9,9 @@ MIN_VOLUME_SIZE=10
 
 SECTION_SEPARATOR = '#'*60
 
+networkStackName = 'CapstoneNetworkStack'
+adStackName = 'CapstoneADStack'
+
 '''
 DON'T FORGET TO UPDATE CLOUDFORMATION TEMPLATE LOCATIONS
 (Either replace references to or instantiate following vars)
@@ -16,7 +19,8 @@ DON'T FORGET TO UPDATE CLOUDFORMATION TEMPLATE LOCATIONS
 Var Names:
 vpcTemplateUrl
 '''
-vpcTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/2018015HR4-VPCEnvironmentForCapstonei9fxlnn9ix8'
+vpcTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/2018021zsd-NetworkStackForCapstone.yamlanbhuxkjjjw'
+adTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/2018021S9M-ADStackForCapstone.yamlchu7ei7c0qh'
 
 ec2 = boto3.resource('ec2') #EC2 object allows connection and manipulation of AWS EC2 resource types
 cloudFormationClient = boto3.client('cloudformation') #CloudFormation client allows creation of AWS resources in a stack by using CloudFormation templates
@@ -28,48 +32,104 @@ def main():
     print('Please enter the following information and we\'ll get started.\n\n')
 
     #Gather data from user
-    userDomain = getDomainName()
-    userKeyPair = getKeyPairName()
-    userNumDcs = getNumDcs()
-    userNumFileServers = getNumFileServers()
-    userVolumeSize = getVolumeSize()
-    userDcInstanceType = getInstanceType('Please enter the instance type to use for Domain Controllers [Default: t2.micro]: ')
-    userFsInstanceType = getInstanceType('Please enter the instance type to use for File Servers [Default: t2.micro]: ')
-    userExchangeInstanceType = getInstanceType('Please enter the instance type to use for Exchange servers [Default: t2.micro]: ')
-    userMiscInstanceType = getInstanceType('Please enter the instance type to use for all other servers (VPN, 802.1x Security, Certificate Authority) [Default: t2.micro]: ')
-    #userDomainAdminUsername = getUsername('Enter a username for the domain administrator account (separate account from the default "Administrator" account): ')
+    userDomainName = getDomainName('Enter your Domain Name: ')
+    userDomainNetBIOSName = getNetBiosName('Enter the NetBIOS name of the domain (Ex. "EXAMPLE"): ')
+    userKeyPair = getKeyPairName('Enter the name of the Key Pair (used when accessing instances): ')
+    userNumDcs = getNumDcs('How many Domain Controllers? [Leave blank to use default of 2]: ')
+    userNumFileServers = getNumFileServers('How many File Servers? [Leave blank to use default of 2]: ')
+    userVolumeSize = getVolumeSize('How much storage would you like (in GiBs) on file servers?: ')
+    userDcInstanceType = getInstanceType('Enter the instance type to use for Domain Controllers [Default: t2.micro]: ')
+    userFsInstanceType = getInstanceType('Enter the instance type to use for File Servers [Default: t2.micro]: ')
+    userExchangeInstanceType = getInstanceType('Enter the instance type to use for Exchange servers [Default: t2.micro]: ')
+    userMiscInstanceType = getInstanceType('Enter the instance type to use for all other servers (VPN, 802.1x Security, Certificate Authority) [Default: t2.micro]: ')
+    userDomainAdminUsername = getUsername('Enter a username for the domain administrator account (separate account from the default "Administrator" account): ')
     userDomainAdminPassword = getPassword('Enter a password for the domain administrator account: ')
     userRestoreModePassword = getPassword('Enter a password for Active Directory Restore Mode: ')
 
     #Build VPC and other networking resources
-    buildVPC()
+    buildNetworkStack()
 
+	#Build Active Directory and Domain Controllers
+    buildADStack(networkStackName, userDomainName, userDomainNetBIOSName, userDomainAdminUsername, userDomainAdminPassword, userRestoreModePassword, userDcInstanceType, userKeyPair)
+	
     #Build instances...
 
 #Build VPC and other networking resources
-def buildVPC():
+def buildNetworkStack():
     #vpcStackWaiter can be called to halt script execution until the specified stack is finished executing/building
     vpcStackWaiter = cloudFormationClient.get_waiter('stack_create_complete')
     
     #Print estimated time to completion
     print('\n' + SECTION_SEPARATOR)
     print('Building AWS Networking...')
-    print('Estimated time to completion: ~2-5 min.')
+    print('Estimated time to completion: ~2 min.')
     
     vpcStackResponse = cloudFormationClient.create_stack(
-        StackName='CapstoneVPCStack',
+        StackName=networkStackName,
         TemplateURL=vpcTemplateUrl,
-        )
+    )
     vpcStackWaiter.wait(StackName=vpcStackResponse['StackId'])
 
     print('AWS Networking... Build Complete!')
 
+#Build first two Domain Controllers in AD domain
+def buildADStack(networkStackName, userDomainName, userDomainNetBIOSName, userDomainAdminUsername, userDomainAdminPassword, userRestoreModePassword, userDcInstanceType, userKeyPair):
+	#adStackWaiter can be called to halt script execution until the specified stack is finished building
+	adStackWaiter = cloudFormationClient.get_waiter('stack_create_complete')
+	
+	#Print estimated time to completion
+	print('\n' + SECTION_SEPARATOR)
+	print('Building Active Directory...')
+	#print('Estimated time to completion: ~ min.')
+	
+	adStackResponse = cloudFormationClient.create_stack(
+		StackName=adStackName,
+		TemplateURL=adTemplateUrl,
+		Parameters=[
+			{
+				'ParameterKey':'NetworkStackName',
+				'ParameterValue':networkStackName
+			},
+			{
+				'ParameterKey':'DomainDNSName',
+				'ParameterValue':userDomainName
+			},
+			{
+				'ParameterKey':'DomainNetBIOSName',
+				'ParameterValue':userDomainNetBIOSName
+			},
+			{
+				'ParameterKey':'DomainAdminUser',
+				'ParameterValue':userDomainAdminUsername
+			},
+			{
+				'ParameterKey':'DomainAdminPassword',
+				'ParameterValue':userDomainAdminPassword
+			},
+			{
+				'ParameterKey':'RestoreModePassword',
+				'ParameterValue':userRestoreModePassword
+			},
+			{
+				'ParameterKey':'DCInstanceType',
+				'ParameterValue':userDcInstanceType
+			},
+			{
+				'ParameterKey':'KeyPair',
+				'ParameterValue':userKeyPair
+			},
+		],
+	)
+	adStackWaiter.wait(StackName=adStackResponse['StackId'])
+	
+	print('Active Directory... Build Complete!')
+
 #Prompt for and validate the Domain Name
-def getDomainName():
+def getDomainName(message):
     validDomain = False
     #Loop until the user enters a valid domain
     while(not validDomain):
-        userDomain = input('Please enter your Domain Name: ')
+        userDomain = input(message)
         #The domain can include upper and lowercase letters, numbers, and
         #dashes (-), as long as the dashes are not the first or last 
         #character. Ex. "-example.com" = invalid, "ex-ample.com" = valid.
@@ -79,9 +139,24 @@ def getDomainName():
         else:
             print('Invalid domain. Please enter a valid domain. Domain names must contain only upper and lowercase letters and numbers. Hyphens or dashes (-) are allowed only if they are NOT the first or last character.')
     return userDomain
+	
+#Prompt for the NetBIOS name of the domain
+def getNetBiosName(message):
+    validNetBiosName = False
+    #Loop until the user enters a valid NetBIOS name
+    while(not validNetBiosName):
+        userNetBiosName = input(message)
+        #The domain NetBIOS name is typically the domain name without the root domain
+        # Ex. example.com => EXAMPLE
+        regex = re.compile('^[A-Za-z0-9\-]+$')
+        if(regex.match(userNetBiosName) and len(userNetBiosName) >= 1 and len(userNetBiosName) <= 15):
+            validNetBiosName = True
+        else:
+            print('Invalid name. Domain NetBIOS names are typically the domain name without the root (Ex. example.com => EXAMPLE) and computer NetBIOS names are a short name for the computer. NetBIOS names must be between 1 and 15 characters long and can have upper and lowercase letters, numbers, and hyphens (-).')
+    return userNetBiosName
 
 #Prompt for the name of the Key Pair to use for accessing instances
-def getKeyPairName():
+def getKeyPairName(message):
     #Compile a list of all available Key Pair Names
     keyPairs = ec2.key_pairs.all()
     validPairNames = []
@@ -91,7 +166,7 @@ def getKeyPairName():
     validKeyPairName = False
     #Prompt for and validate Key Pair Name
     while(not validKeyPairName):
-        userKeyPairName = input('Please enter the name of the Key Pair (used when accessing instances): ')
+        userKeyPairName = input(message)
         if(not userKeyPairName in validPairNames):
             print('Please, enter the name of the key pair you created in AWS.')
         else:
@@ -100,11 +175,11 @@ def getKeyPairName():
 
 #Prompt for the number of Domain Controllers
 #Users must enter a number between 2 and 8, the default is 2
-def getNumDcs():
+def getNumDcs(message):
     validNum = False
     #Loop until the user enters a number between 2 and 8, inclusive
     while(not validNum):
-        userNumDcs = input('How many Domain Controllers? [Leave blank to use default of 2]: ')
+        userNumDcs = input(message)
         #Ensure the user enters a number between 2 and 8, or leaves the input blank
         regex = re.compile('(^$)|^[2-8]$')
         if(not regex.match(userNumDcs)):
@@ -119,11 +194,11 @@ def getNumDcs():
 
 #Prompt for the number of File Servers
 #Users must enter a number between 2 and 4, the default is 2
-def getNumFileServers():
+def getNumFileServers(message):
     validNum = False
     #Loop until the user enters a number between 2 and 4, inclusive
     while(not validNum):
-        userNumFileServers = input('How many File Servers? [Leave blank to use default of 2]: ')
+        userNumFileServers = input(message)
         #Ensure the user enters a number between 2 and 4, or leaves the input blank
         regex = re.compile('(^$)|^[2-4]$')
         if(not regex.match(userNumFileServers)):
@@ -137,11 +212,11 @@ def getNumFileServers():
         return int(userNumFileServers)
 
 #Prompt for and validate the size of drives to be added to file servers
-def getVolumeSize():
+def getVolumeSize(message):
     validSize = False
     #Loop until a valid volume size is entered
     while(not validSize):
-        userVolumeSize = input('How much storage would you like (in GiBs) on file servers?: ')
+        userVolumeSize = input(message)
         #Validate that the number entered is positive and between MAX_VOLUME_SIZE and MIN_VOLUME_SIZE
         try:
             if(int(userVolumeSize) > MAX_VOLUME_SIZE or int(userVolumeSize) < MIN_VOLUME_SIZE):
@@ -167,6 +242,20 @@ def getInstanceType(message):
                 print('%s, ' % (instanceType), end='')
             print(validTypes[-1])
     return userInstanceType
+	
+#Prompt for usernames for AD users
+def getUsername(message):
+    validUsername = False
+    #Loop until the user enters a valid username
+    while(not validUsername):
+        userName = input(message)
+        #Ensure the username has no symbols
+        regex = re.compile('[a-zA-Z0-9]*')
+        if(len(userName) >= 3 and len(userName) <= 25 and regex.match(userName)):
+            validUsername = True
+        else:
+            print('Invalid username. Usernames can contain upper and lowercase letters and numbers. Usernames should be between 3 and 25 characters in length.')
+    return userName
 
 #Prompt for and validate the AD admin password
 def getPassword(message):
