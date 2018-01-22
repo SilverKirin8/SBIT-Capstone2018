@@ -183,7 +183,7 @@ Resources:
                   - 'c:\cfn\cfn-hup.conf'
                   - 'c:\cfn\hooks.d\cfn-auto-reloader.conf'
           commands:
-            disable-windows-firewall:
+            a-disable-windows-firewall:
               command: !Join 
                 - ''
                 - - >-
@@ -192,14 +192,14 @@ Resources:
               waitAfterCompletion: '0'
         rename:
           commands:
-            set-static-ip:
+            a-set-static-ip:
               command: !Join 
                 - ''
                 - - >-
                     powershell.exe -ExecutionPolicy RemoteSigned -Command
                     c:\cfn\scripts\Set-StaticIP.ps1
               waitAfterCompletion: '45'
-            powershell-RenameComputer:
+            b-powershell-RenameComputer:
               command: !Join 
                 - ''
                 - - 'powershell.exe Rename-Computer -NewName '
@@ -208,14 +208,14 @@ Resources:
               waitAfterCompletion: forever
         installADDS:
           commands:
-            install-Domain-Services:
+            a-install-Domain-Services:
               command: !Join 
                 - ''
                 - - >-
                     powershell.exe -Command "Install-WindowsFeature
                     AD-Domain-Services, rsat-adds -IncludeAllSubFeature"
               waitAfterCompletion: '0'
-            install-forest:
+            b-install-forest:
               command: !Join 
                 - ''
                 - - 'powershell.exe -Command "Install-ADDSForest -DomainName '
@@ -228,12 +228,12 @@ Resources:
                   - !Ref DomainNetBIOSName
                   - ' -Confirm:$false -Force"'
               waitAfterCompletion: forever
-            restart-Netlogon-service:
+            c-restart-Netlogon-service:
               command: !Join
                 - ''
                 - - powershell.exe -Command Restart-Service Netlogon -EA 0
               waitAfterCompletion: '180'
-            create-new-user:
+            d-create-new-user:
               command: !Join
                 - ''
                 - - 'powershell.exe -Command "New-ADUser -Name '
@@ -246,7 +246,7 @@ Resources:
                   - ''''
                   - ' -AsPlainText -Force) -Enabled $true -PasswordNeverExpires $true"'
               waitAfterCompletion: '0'
-            make-user-domain-admin:
+            e-make-user-domain-admin:
               command: !Join
                 - ''
                 - - >-
@@ -256,7 +256,7 @@ Resources:
               waitAfterCompletion: '0'
         configureSites:
           commands:
-            rename-default-site:
+            a-rename-default-site:
               command: !Join
                 - ''
                 - - 'powershell.exe '
@@ -267,12 +267,12 @@ Resources:
                     'Default-First-Site-Name'} | Rename-ADObject -NewName AZ1
                   - '"'
               waitAfterCompletion: '0'
-            create-site-2:
+            b-create-site-2:
               command: !Join
                 - ''
                 - - powershell.exe -Command "New-ADReplicationSite AZ2"
               waitAfterCompletion: '0'
-            create-public-subnet-1:
+            c-create-public-subnet-1:
               command: !Join
                 - ''
                 - - 'powershell.exe -Command "New-ADReplicationSubnet -Name '
@@ -280,7 +280,7 @@ Resources:
                       !Sub '${NetworkStackName}-PubSub1Cidr'
                   - ' -Site AZ1"'
               waitAfterCompletion: '0'
-            create-private-subnet-1:
+            d-create-private-subnet-1:
               command: !Join
                 - ''
                 - - 'powershell.exe -Command "New-ADReplicationSubnet -Name '
@@ -288,7 +288,7 @@ Resources:
                       !Sub '${NetworkStackName}-PrivSub1Cidr'
                   - ' -Site AZ1"'
               waitAfterCompletion: '0'
-            create-private-subnet-2:
+            e-create-private-subnet-2:
               command: !Join
                 - ''
                 - - 'powershell.exe -Command "New-ADReplicationSubnet -Name '
@@ -296,7 +296,7 @@ Resources:
                       !Sub '${NetworkStackName}-PrivSub2Cidr'
                   - ' -Site AZ2"'
               waitAfterCompletion: '0'
-            set-replication-site-link:
+            f-set-replication-site-link:
               command: !Join
                 - ''
                 - - powershell.exe -Command "
@@ -307,7 +307,7 @@ Resources:
               waitAfterCompletion: '0'
         finalize:
           commands:
-            signal-success:
+            a-signal-success:
               command: !Join
                 - ''
                 - - cfn-signal.exe -e 0 "
@@ -332,9 +332,11 @@ Resources:
               <script>
             - 'cfn-init.exe -v -c config -s '
             - !Ref 'AWS::StackId'
-            - ' -r DC1 --region '
+            - ' -r DC1'
+            - ' --region '
             - !Ref 'AWS::Region'
             - |+
+
             - |
               </script>
   DC2:
@@ -404,7 +406,7 @@ Resources:
                   - 'c:\cfn\cfn-hup.conf'
                   - 'c:\cfn\hooks.d\cfn-auto-reloader.conf'
           commands:
-            disable-windows-firewall:
+            a-disable-windows-firewall:
               command: !Join 
                 - ''
                 - - >-
@@ -413,14 +415,14 @@ Resources:
               waitAfterCompletion: '0'
         rename:
           commands:
-            set-static-ip:
+            a-set-static-ip:
               command: !Join 
                 - ''
                 - - >-
                     powershell.exe -ExecutionPolicy RemoteSigned -Command
                     c:\cfn\scripts\Set-StaticIP.ps1
               waitAfterCompletion: '45'
-            powershell-RenameComputer:
+            b-powershell-RenameComputer:
               command: !Join 
                 - ''
                 - - 'powershell.exe Rename-Computer -NewName '
@@ -429,7 +431,7 @@ Resources:
               waitAfterCompletion: forever
         join:
           commands:
-            join-domain:
+            a-join-domain:
               command: !Join
                 - ''
                 - - powershell.exe -Command "
@@ -449,14 +451,14 @@ Resources:
               waitAfterCompletion: forever
         addDC:
           commands:
-            install-domain-services:
+            a-install-domain-services:
               command: !Join
                 - ''
                 - - >-
                     powershell.exe -Command 'Install-WindowsFeature
                     AD-Domain-Services, rsat-adds -IncludeAllSubFeature"
               waitAfterCompletion: '0'
-            add-dc:
+            b-add-dc:
               command: !Join
                 - ''
                 - - powershell.exe -Command "
@@ -481,7 +483,7 @@ Resources:
               waitAfterCompletion: forever
         finalize:
           commands:
-            update-dns-servers-dc2:
+            a-update-dns-servers-dc2:
               command: !Join
                 - ''
                 - - powershell.exe -Command "
@@ -493,7 +495,7 @@ Resources:
                   - !Ref DC2PrivIP
                   - '"'
               waitAfterCompletion: '0'
-            update-dns-servers-dc1:
+            b-update-dns-servers-dc1:
               command: !Join
                 - ''
                 - - 'powershell.exe -Command '
@@ -518,7 +520,7 @@ Resources:
                   - ''''
                   - ' -AsPlainText -Force)))"'
               waitAfterCompletion: '0'
-            signal-success:
+            c-signal-success:
               command: !Join
                 - ''
                 - - cfn-signal.exe -e 0 "
