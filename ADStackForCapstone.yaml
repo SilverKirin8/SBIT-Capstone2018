@@ -232,7 +232,7 @@ Resources:
               command: !Join
                 - ''
                 - - powershell.exe -Command Restart-Service Netlogon -EA 0
-              waitAfterCompletion: '180'
+              waitAfterCompletion: '300'
             d-create-new-user:
               command: !Join
                 - ''
@@ -251,7 +251,7 @@ Resources:
                 - ''
                 - - >-
                     powershell.exe -ExecutionPolicy RemoteSigned -Command
-                    c:\cfn\scripts\ConvertTo-EnterpriseAdmin.ps1 -Members
+                    c:\cfn\scripts\ConvertTo-EnterpriseAdmin.ps1 -Members 
                   - !Ref DomainAdminUser
               waitAfterCompletion: '0'
         configureSites:
@@ -317,6 +317,7 @@ Resources:
       ImageId: !Ref DCImage
       InstanceType: !Ref DCInstanceType
       KeyName: !Ref KeyPair
+      PrivateIpAddress: !Ref DC1PrivIP
       SecurityGroupIds:
         - !Ref DC1SecurityGroup
       SubnetId: 
@@ -341,6 +342,7 @@ Resources:
               </script>
   DC2:
     Type: 'AWS::EC2::Instance'
+    DependsOn: DC1WaitCondition
     Metadata:
       'AWS::CloudFormation::Init':
         configSets:
@@ -530,6 +532,7 @@ Resources:
       ImageId: !Ref DCImage
       InstanceType: !Ref DCInstanceType
       KeyName: !Ref KeyPair
+      PrivateIpAddress: !Ref DC2PrivIP
       SecurityGroupIds:
         - !Ref DC2SecurityGroup
       SubnetId: 

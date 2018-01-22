@@ -19,8 +19,8 @@ DON'T FORGET TO UPDATE CLOUDFORMATION TEMPLATE LOCATIONS
 Var Names:
 vpcTemplateUrl
 '''
-vpcTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/2018021zsd-NetworkStackForCapstone.yamlanbhuxkjjjw'
-adTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/2018022whd-ADStackForCapstone.yamlt6yopunmnch'
+vpcTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/2018022aO1-NetworkStackForCapstone.yaml7ruxj7sxky9'
+adTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/2018022fGU-ADStackForCapstone.yamlri6gcdz2b8p'
 ec2 = boto3.resource('ec2') #EC2 object allows connection and manipulation of AWS EC2 resource types
 cloudFormationClient = boto3.client('cloudformation') #CloudFormation client allows creation of AWS resources in a stack by using CloudFormation templates
 
@@ -61,7 +61,7 @@ def buildNetworkStack():
     #Print estimated time to completion
     print('\n' + SECTION_SEPARATOR)
     print('Building AWS Networking...')
-    print('Estimated time to completion: ~2 min.')
+    print('Estimated time to completion: ~2-5 min.')
     
     vpcStackResponse = cloudFormationClient.create_stack(
         StackName = networkStackName,

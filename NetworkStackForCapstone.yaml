@@ -67,6 +67,21 @@ Resources:
     Properties:
       InternetGatewayId: !Ref InternetGW
       VpcId: !Ref Vpc
+  NatGW:
+    Type: 'AWS::EC2::NatGateway'
+    Properties:
+      AllocationId:
+        Fn::GetAtt:
+          - ElasticIP
+          - AllocationId
+      SubnetId: !Ref PubSub1
+      Tags:
+        - Key: 'Name'
+          Value: 'NAT Gateway'
+  ElasticIP:
+    Type: 'AWS::EC2::EIP'
+    Properties:
+      Domain: vpc
   PrivSub1:
     Type: 'AWS::EC2::Subnet'
     Properties:
@@ -94,157 +109,13 @@ Resources:
         - Key: Name
           Value: PublicSubnet1
       VpcId: !Ref Vpc
-  PrivSub1NACL:
-    Type: 'AWS::EC2::NetworkAcl'
-    Properties:
-      Tags:
-        - Key: Name
-          Value: Private Subnet 1 Network ACL
-      VpcId: !Ref Vpc
-  AssociatePrivSub1toPrivSub1NACL:
-    Type: 'AWS::EC2::SubnetNetworkAclAssociation'
-    Properties:
-      SubnetId: !Ref PrivSub1
-      NetworkAclId: !Ref PrivSub1NACL
-  AllowPrivSub1ToPrivSub2:
-    Type: 'AWS::EC2::NetworkAclEntry'
-    Properties:
-      CidrBlock: !Ref PrivSub2CidrBlock
-      Egress: true
-      NetworkAclId: !Ref PrivSub1NACL
-      Protocol: -1
-      RuleAction: allow
-      RuleNumber: 100
-  AllowPrivSub1ToPubSub1:
-    Type: 'AWS::EC2::NetworkAclEntry'
-    Properties:
-      CidrBlock: !Ref PubSub1CidrBlock
-      Egress: true
-      NetworkAclId: !Ref PrivSub1NACL
-      Protocol: -1
-      RuleAction: allow
-      RuleNumber: 200
-  AllowPrivSub1FromPrivSub2:
-    Type: 'AWS::EC2::NetworkAclEntry'
-    Properties:
-      CidrBlock: !Ref PrivSub2CidrBlock
-      Egress: false
-      NetworkAclId: !Ref PrivSub1NACL
-      Protocol: -1
-      RuleAction: allow
-      RuleNumber: 100
-  AllowPrivSub1FromPubSub1:
-    Type: 'AWS::EC2::NetworkAclEntry'
-    Properties:
-      CidrBlock: !Ref PubSub1CidrBlock
-      Egress: false
-      NetworkAclId: !Ref PrivSub1NACL
-      Protocol: -1
-      RuleAction: allow
-      RuleNumber: 200
-  PrivSub2NACL:
-    Type: 'AWS::EC2::NetworkAcl'
-    Properties:
-      Tags:
-        - Key: Name
-          Value: Private Subnet 2 Network ACL
-      VpcId: !Ref Vpc
-  AssociatePrivSub2toPrivSub2NACL:
-    Type: 'AWS::EC2::SubnetNetworkAclAssociation'
-    Properties:
-      SubnetId: !Ref PrivSub2
-      NetworkAclId: !Ref PrivSub2NACL
-  AllowPrivSub2ToPrivSub1:
-    Type: 'AWS::EC2::NetworkAclEntry'
-    Properties:
-      CidrBlock: !Ref PrivSub1CidrBlock
-      Egress: true
-      NetworkAclId: !Ref PrivSub2NACL
-      Protocol: -1
-      RuleAction: allow
-      RuleNumber: 100
-  AllowPrivSub2ToPubSub1:
-    Type: 'AWS::EC2::NetworkAclEntry'
-    Properties:
-      CidrBlock: !Ref PubSub1CidrBlock
-      Egress: true
-      NetworkAclId: !Ref PrivSub2NACL
-      Protocol: -1
-      RuleAction: allow
-      RuleNumber: 200
-  AllowPrivSub2FromPrivSub1:
-    Type: 'AWS::EC2::NetworkAclEntry'
-    Properties:
-      CidrBlock: !Ref PrivSub1CidrBlock
-      Egress: false
-      NetworkAclId: !Ref PrivSub2NACL
-      Protocol: -1
-      RuleAction: allow
-      RuleNumber: 100
-  AllowPrivSub2FromPubSub1:
-    Type: 'AWS::EC2::NetworkAclEntry'
-    Properties:
-      CidrBlock: !Ref PubSub1CidrBlock
-      Egress: false
-      NetworkAclId: !Ref PrivSub2NACL
-      Protocol: -1
-      RuleAction: allow
-      RuleNumber: 200
-  PubSub1NACL:
-    Type: 'AWS::EC2::NetworkAcl'
-    Properties:
-      Tags:
-        - Key: Name
-          Value: Public Subnet 1 Network ACL
-      VpcId: !Ref Vpc
-  AssociatePubSub1toPubSub1NACL:
-    Type: 'AWS::EC2::SubnetNetworkAclAssociation'
-    Properties:
-      SubnetId: !Ref PubSub1
-      NetworkAclId: !Ref PubSub1NACL
-  AllowPubSub1ToPrivSub2:
-    Type: 'AWS::EC2::NetworkAclEntry'
-    Properties:
-      CidrBlock: !Ref PrivSub2CidrBlock
-      Egress: true
-      NetworkAclId: !Ref PubSub1NACL
-      Protocol: -1
-      RuleAction: allow
-      RuleNumber: 100
-  AllowPubSub1ToPrivSub1:
-    Type: 'AWS::EC2::NetworkAclEntry'
-    Properties:
-      CidrBlock: !Ref PrivSub1CidrBlock
-      Egress: true
-      NetworkAclId: !Ref PubSub1NACL
-      Protocol: -1
-      RuleAction: allow
-      RuleNumber: 200
-  AllowPubSub1FromPrivSub2:
-    Type: 'AWS::EC2::NetworkAclEntry'
-    Properties:
-      CidrBlock: !Ref PrivSub2CidrBlock
-      Egress: false
-      NetworkAclId: !Ref PubSub1NACL
-      Protocol: -1
-      RuleAction: allow
-      RuleNumber: 100
-  AllowPubSub1FromPrivSub1:
-    Type: 'AWS::EC2::NetworkAclEntry'
-    Properties:
-      CidrBlock: !Ref PubSub1CidrBlock
-      Egress: false
-      NetworkAclId: !Ref PubSub1NACL
-      Protocol: -1
-      RuleAction: allow
-      RuleNumber: 200
   PubSub1RouteTable:
     Type: 'AWS::EC2::RouteTable'
     Properties:
       VpcId: !Ref Vpc
       Tags:
         - Key: Name
-          Value: Private Subnet 1 Route Table
+          Value: Public Subnet 1 Route Table
   AssociatePubSub1toPubSub1RouteTable:
     Type: 'AWS::EC2::SubnetRouteTableAssociation'
     Properties:
@@ -257,6 +128,44 @@ Resources:
       DestinationCidrBlock: 0.0.0.0/0
       GatewayId: !Ref InternetGW
       RouteTableId: !Ref PubSub1RouteTable
+  PrivSub1RouteTable:
+    Type: 'AWS::EC2::RouteTable'
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: 'Name'
+          Value: 'Private Subnet 1 Route Table'
+  AssociatePrivSub1toPrivSub1RouteTable:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      RouteTableId: !Ref PrivSub1RouteTable
+      SubnetId: !Ref PrivSub1
+  PrivSub1DefRoute:
+    Type: 'AWS::EC2::Route'
+    DependsOn: NatGW
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGW
+      RouteTableId: !Ref PrivSub1RouteTable
+  PrivSub2RouteTable:
+    Type: 'AWS::EC2::RouteTable'
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: 'Name'
+          Value: 'Private Subnet 2 Route Table'
+  AssociatePrivSub2toPrivSub2RouteTable:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      RouteTableId: !Ref PrivSub2RouteTable
+      SubnetId: !Ref PrivSub2
+  PrivSub2DefRoute:
+    Type: 'AWS::EC2::Route'
+    DependsOn: NatGW
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGW
+      RouteTableId: !Ref PrivSub2RouteTable
 Outputs:
   VPCID:
     Description: 'The ID of the VPC object created in "Resources".'
