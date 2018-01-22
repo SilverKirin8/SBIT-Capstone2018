@@ -457,7 +457,7 @@ Resources:
               command: !Join
                 - ''
                 - - >-
-                    powershell.exe -Command 'Install-WindowsFeature
+                    powershell.exe -Command "Install-WindowsFeature
                     AD-Domain-Services, rsat-adds -IncludeAllSubFeature"
               waitAfterCompletion: '0'
             b-add-dc:

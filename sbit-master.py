@@ -20,7 +20,7 @@ Var Names:
 vpcTemplateUrl
 '''
 vpcTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/2018022aO1-NetworkStackForCapstone.yaml7ruxj7sxky9'
-adTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/2018022fGU-ADStackForCapstone.yamlri6gcdz2b8p'
+adTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/20180227K8-ADStackForCapstone.yamlcx1eo7c112p'
 ec2 = boto3.resource('ec2') #EC2 object allows connection and manipulation of AWS EC2 resource types
 cloudFormationClient = boto3.client('cloudformation') #CloudFormation client allows creation of AWS resources in a stack by using CloudFormation templates
 
