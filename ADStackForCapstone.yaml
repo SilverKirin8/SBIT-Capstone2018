@@ -504,12 +504,14 @@ Resources:
                   - '"Invoke-Command -Scriptblock{ '
                   - >-
                     Get-NetAdapter | Set-DnsClientServerAddress
-                    -ServerAddresses
+                    -ServerAddresses 
                   - !Ref DC1PrivIP
                   - ','
                   - !Ref DC2PrivIP
                   - ' } -ComputerName '
                   - !Ref DC1NetBIOSName
+                  - '.'
+                  - !Ref DomainDNSName
                   - ' -Credential '
                   - (New-Object System.Management.Automation.PSCredential('
                   - !Ref DomainNetBIOSName
