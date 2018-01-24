@@ -79,7 +79,7 @@ def buildADStack(networkStackName, userDomainName, userDomainNetBIOSName, userDo
 	#Print estimated time to completion
 	print('\n' + SECTION_SEPARATOR)
 	print('Building Active Directory...')
-	#print('Estimated time to completion: ~ min.')
+	print('Estimated time to completion: ~28 min.')
 	
 	adStackResponse = cloudFormationClient.create_stack(
 		StackName = adStackName,

@@ -4,6 +4,12 @@ Description: >-
   created to isolate files for file shares (and to ease file paths during configuration), a DFS 
   namespace, DFS replication, and possibly FSRM for file screens.
 Parameters:
+  NetworkStackName:
+    Type: String
+    Description: 'The name of the stack used to create the VPC and other network resources.'
+  ADStackName:
+    Type: String
+    Description: 'The name of the stack used to create the DCs and the domain.'
   DomainDNSName:
     Type: String
     Description: >-
@@ -35,6 +41,12 @@ Parameters:
     Description: >-
       This password should be for the same user created in ADStack.
       The account password for the domain admin user.
+  PrimaryAZ:
+    Type: String
+    Description: 'The Availability Zone of Public Subnet 1 and Private Subnet 1. (Ex. "us-east-2a")'
+  SecondaryAZ:
+    Type: String
+    Description: 'The Availability Zone of Private Subnet 2. (Ex. "us-east-2b")'
   FSInstanceType:
     Type: String
     Description: 'The instance type for the File Servers. Default: t2.micro'
@@ -55,7 +67,7 @@ Parameters:
     Description: 'The AMI ID to be used when creating file servers.'
     Default: 'ami-05446e60'
   FSVolumeSize:
-    Type: Integer
+    Type: Number
     Description: 'The size of volumes to add to file server instances for file shares.'
   KeyPair:
     Type: 'AWS::EC2::KeyPair::KeyName'
@@ -91,49 +103,329 @@ Parameters:
 Resources:
   FS1:
     Type: 'AWS::EC2::Instance'
-    ImageId: !Ref FSImage
-    InstanceType: !Ref FSInstanceType
-    KeyName: !Ref KeyPair
-    PrivateIpAddress: !Ref FS1PrivIp
-    SecurityGroupIds:
-      - Fn::ImportValue:
-        !Sub '${ADStackName}-DomainMemberSG
-      - !Ref FS1SecurityGroup
-    SubnetId: 
-      Fn::ImportValue:
-        !Sub '${NetworkStackName}-PrivSub2Id'
-    Tags:
-      - Key: 'Name'
-        Value: 'FS1'
-    UserData:
-      Fn::Join:
-          - ''
-          - - |
-              <script>
-            - 'cfn-init.exe -v -c config -s '
-            - !Ref 'AWS::StackId'
-            - ' -r FS1 --region '
-            - !Ref 'AWS::Region'
-            - |+
-            - |
-              </script>
-    Volumes:
-      - VolumeId: !Ref FS1Volume
+    Metadata:
+      'AWS::CloudFormation::Init':
+        configSets:
+          config:
+            - setup
+            - rename
+            - installDFS
+            - finalize
+        setup:
+          files:
+            'c:\cfn\cfn-hup.conf':
+              content: !Join 
+                - ''
+                - - |
+                    [main]
+                  - stack=
+                  - !Ref 'AWS::StackName'
+                  - |+
+
+                  - region=
+                  - !Ref 'AWS::Region'
+                  - ''
+            'c:\cfn\hooks.d\cfn-auto-reloader.conf':
+              content: !Join 
+                - ''
+                - - |
+                    [cfn-auto-reloader-hook]
+                  - |
+                    triggers=post.update
+                  - |
+                    path=Resources.FS1.Metadata.AWS::CloudFormation::Init
+                  - 'action=cfn-init.exe -v -c config -s '
+                  - !Ref 'AWS::StackId'
+                  - ' -r FS1'
+                  - ' --region '
+                  - !Ref 'AWS::Region'
+                  - ''
+            'c:\cfn\scripts\Set-StaticIP.ps1':
+              content: !Join 
+                - ''
+                - - $netip = Get-NetIPConfiguration;
+                  - >-
+                    $ipconfig = Get-NetIPAddress | ?{$_.IpAddress -eq
+                    $netip.IPv4Address.IpAddress};
+                  - Get-NetAdapter | Set-NetIPInterface -DHCP Disabled;
+                  - >-
+                    Get-NetAdapter | New-NetIPAddress -AddressFamily IPv4
+                    -IPAddress $netip.IPv4Address.IpAddress -PrefixLength
+                    $ipconfig.PrefixLength -DefaultGateway
+                    $netip.IPv4DefaultGateway.NextHop;
+                  - >-
+                    Get-NetAdapter | Set-DnsClientServerAddress -ServerAddresses
+                    $netip.DNSServer.ServerAddresses;
+                  - ''
+          services:
+            windows:
+              cfn-hup:
+                enabled: 'true'
+                ensureRunning: 'true'
+                files:
+                  - 'c:\cfn\cfn-hup.conf'
+                  - 'c:\cfn\hooks.d\cfn-auto-reloader.conf'
+          commands:
+            a-disable-windows-firewall:
+              command: !Join 
+                - ''
+                - - >-
+                    powershell.exe -Command "Get-NetFirewallProfile |
+                    Set-NetFirewallProfile -Enabled False"
+              waitAfterCompletion: '0'
+        rename:
+          commands:
+            a-set-static-ip:
+              command: !Join 
+                - ''
+                - - >-
+                    powershell.exe -ExecutionPolicy RemoteSigned -Command
+                    c:\cfn\scripts\Set-StaticIP.ps1
+              waitAfterCompletion: '45'
+            b-powershell-RenameComputer:
+              command: !Join 
+                - ''
+                - - 'powershell.exe Rename-Computer -NewName '
+                  - !Ref FS1NetBIOSName
+                  - ' -Restart'
+              waitAfterCompletion: forever
+        installDFS:
+          commands:
+            a-install-dfs:
+              command: !Join
+                - ''
+                - Command that installs the DFS Role
+        finalize:
+          commands:
+            a-signal-success:
+              command: !Join
+                - ''
+                - - cfn-signal.exe -e 0 "
+                  - !Ref FS1WaitHandle
+                  - '"'
+    Properties:
+      ImageId: !Ref FSImage
+      InstanceType: !Ref FSInstanceType
+      KeyName: !Ref KeyPair
+      PrivateIpAddress: !Ref FS1PrivIP
+      SecurityGroupIds:
+        - Fn::ImportValue:
+            !Sub '${ADStackName}-DomainMemberSG'
+        - !Ref FS1SecurityGroup
+      SubnetId: 
+        Fn::ImportValue: 
+          !Sub '${NetworkStackName}-PrivSub1Id'
+      Tags:
+        - Key: 'Name'
+          Value: 'FS1'
+      UserData:
+        Fn::Join:
+            - ''
+            - - |
+                <script>
+              - 'cfn-init.exe -v -c config -s '
+              - !Ref 'AWS::StackId'
+              - ' -r FS1 --region '
+              - !Ref 'AWS::Region'
+              - |+
+              - |
+                </script>
+      Volumes:
+        - VolumeId: !Ref FS1Volume
+          Device: 'xvdf'
+  FS2:
+    Type: 'AWS::EC2::Instance'
+    Metadata:
+      'AWS::CloudFormation::Init':
+        configSets:
+          config:
+            - setup
+            - rename
+            - installDFS
+            - finalize
+        setup:
+          files:
+            'c:\cfn\cfn-hup.conf':
+              content: !Join 
+                - ''
+                - - |
+                    [main]
+                  - stack=
+                  - !Ref 'AWS::StackName'
+                  - |+
+
+                  - region=
+                  - !Ref 'AWS::Region'
+                  - ''
+            'c:\cfn\hooks.d\cfn-auto-reloader.conf':
+              content: !Join 
+                - ''
+                - - |
+                    [cfn-auto-reloader-hook]
+                  - |
+                    triggers=post.update
+                  - |
+                    path=Resources.FS2.Metadata.AWS::CloudFormation::Init
+                  - 'action=cfn-init.exe -v -c config -s '
+                  - !Ref 'AWS::StackId'
+                  - ' -r FS2'
+                  - ' --region '
+                  - !Ref 'AWS::Region'
+                  - ''
+            'c:\cfn\scripts\Set-StaticIP.ps1':
+              content: !Join 
+                - ''
+                - - $netip = Get-NetIPConfiguration;
+                  - >-
+                    $ipconfig = Get-NetIPAddress | ?{$_.IpAddress -eq
+                    $netip.IPv4Address.IpAddress};
+                  - Get-NetAdapter | Set-NetIPInterface -DHCP Disabled;
+                  - >-
+                    Get-NetAdapter | New-NetIPAddress -AddressFamily IPv4
+                    -IPAddress $netip.IPv4Address.IpAddress -PrefixLength
+                    $ipconfig.PrefixLength -DefaultGateway
+                    $netip.IPv4DefaultGateway.NextHop;
+                  - >-
+                    Get-NetAdapter | Set-DnsClientServerAddress -ServerAddresses
+                    $netip.DNSServer.ServerAddresses;
+                  - ''
+          services:
+            windows:
+              cfn-hup:
+                enabled: 'true'
+                ensureRunning: 'true'
+                files:
+                  - 'c:\cfn\cfn-hup.conf'
+                  - 'c:\cfn\hooks.d\cfn-auto-reloader.conf'
+          commands:
+            a-disable-windows-firewall:
+              command: !Join 
+                - ''
+                - - >-
+                    powershell.exe -Command "Get-NetFirewallProfile |
+                    Set-NetFirewallProfile -Enabled False"
+              waitAfterCompletion: '0'
+        rename:
+          commands:
+            a-set-static-ip:
+              command: !Join 
+                - ''
+                - - >-
+                    powershell.exe -ExecutionPolicy RemoteSigned -Command
+                    c:\cfn\scripts\Set-StaticIP.ps1
+              waitAfterCompletion: '45'
+            b-powershell-RenameComputer:
+              command: !Join 
+                - ''
+                - - 'powershell.exe Rename-Computer -NewName '
+                  - !Ref FS2NetBIOSName
+                  - ' -Restart'
+              waitAfterCompletion: forever
+        installDFS:
+          commands:
+            a-install-dfs:
+              command: !Join
+                - ''
+                - Command that installs the DFS Role
+        finalize:
+          commands:
+            a-signal-success:
+              command: !Join
+                - ''
+                - - cfn-signal.exe -e 0 "
+                  - !Ref FS2WaitHandle
+                  - '"'
+    Properties:
+      ImageId: !Ref FSImage
+      InstanceType: !Ref FSInstanceType
+      KeyName: !Ref KeyPair
+      PrivateIpAddress: !Ref FS2PrivIP
+      SecurityGroupIds:
+        - Fn::ImportValue:
+            !Sub '${ADStackName}-DomainMemberSG'
+        - !Ref FS2SecurityGroup
+      SubnetId: 
+        Fn::ImportValue: 
+          !Sub '${NetworkStackName}-PrivSub2Id'
+      Tags:
+        - Key: 'Name'
+          Value: 'FS2'
+      UserData:
+        Fn::Join:
+            - ''
+            - - |
+                <script>
+              - 'cfn-init.exe -v -c config -s '
+              - !Ref 'AWS::StackId'
+              - ' -r FS2 --region '
+              - !Ref 'AWS::Region'
+              - |+
+              - |
+                </script>
+      Volumes:
+      - VolumeId: !Ref FS2Volume
         Device: 'xvdf'
-    AdditionalInfo: 
   FS1Volume:
     Type: 'AWS::EC2::Volume'
-    AvailabilityZone: !Ref PrimaryAZ
-    Size: !Ref FSVolumeSize
-    Tags:
-      - Key: 'Name'
-        Value: 'FS1-Volume2'
-    VolumeType: 'gp2'
+    Properties:
+      AvailabilityZone: !Ref PrimaryAZ
+      Size: !Ref FSVolumeSize
+      Tags:
+        - Key: 'Name'
+          Value: 'FS1-Volume2'
+      VolumeType: 'gp2'
   FS2Volume:
     Type: 'AWS::EC2::Volume'
-    AvailabilityZone: !Ref SecondaryAZ
-    Size: !Ref FSVolumeSize
-    Tags:
-      - Key: 'Name'
-        Value: 'FS2-Volume2'
-    VolumeType: 'gp2'
+    Properties:
+      AvailabilityZone: !Ref SecondaryAZ
+      Size: !Ref FSVolumeSize
+      Tags:
+        - Key: 'Name'
+          Value: 'FS2-Volume2'
+      VolumeType: 'gp2'
+  FS1WaitCondition:
+    Type: 'AWS::CloudFormation::WaitCondition'
+    DependsOn: FS1
+    Properties:
+      Handle: !Ref FS1WaitHandle
+      Timeout: '3600'
+  FS1WaitHandle:
+    Type: 'AWS::CloudFormation::WaitConditionHandle'
+  FS2WaitCondition:
+    Type: 'AWS::CloudFormation::WaitCondition'
+    DependsOn: FS2
+    Properties:
+      Handle: !Ref FS2WaitHandle
+      Timeout: '3600'
+  FS2WaitHandle:
+    Type: 'AWS::CloudFormation::WaitConditionHandle'
+  FS1SecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupName: 'File Server 1 Security Group'
+      GroupDescription: 'Security Group for File Server 1'
+      VpcId:
+        Fn::ImportValue:
+          !Sub '${NetworkStackName}-VPCID'
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '5985'
+          ToPort: '5985'
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-VpcCidr'
+  FS2SecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupName: 'File Server 2 Security Group'
+      GroupDescription: 'Security Group for File Server 2'
+      VpcId:
+        Fn::ImportValue:
+          !Sub '${NetworkStackName}-VPCID'
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '5985'
+          ToPort: '5985'
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-VpcCidr'
