@@ -1,5 +1,6 @@
 ﻿# Get the directory path and rules to add to the ACL
 function Modify-AclRules {
+    <# Adds the rules specified in the parameter '-rules' to the ACL of the directory found at '-path' #>
     param(
         [String]
         [Parameter(Position=0,Mandatory=$true)]
@@ -9,9 +10,7 @@ function Modify-AclRules {
         [Parameter(Position=1,Mandatory=$true)]
         $rules
     )
-
-    <# Adds the rules specified in the parameter '-rules' to the ACL of the directory found at '-path' #>
-
+    
     # Get the ACL
     $acl = (Get-Item $path).GetAccessControl('Access');
 
@@ -59,8 +58,8 @@ Remove-Inheritance $rootSharePath
 
 # Build array of ACEs to add to the ACL
 $rules = @();
-$rules += New-Object System.Security.AccessControl.FileSystemAccessRule('Admins','FullControl','None','None','Allow')
-$rules += New-Object System.Security.AccessControl.FileSystemAccessRule('All Employees','Read','None','None','Allow')
+$rules += New-Object System.Security.AccessControl.FileSystemAccessRule('Admins-FullControl','FullControl','None','None','Allow')
+$rules += New-Object System.Security.AccessControl.FileSystemAccessRule('AllEmployees-Read','Read','None','None','Allow')
 
 # Modify the permissions of the root folder
 Modify-AclRules -path $rootSharePath -rules $rules
@@ -75,7 +74,7 @@ Remove-Inheritance $adminsPath
 
 #Build array of ACEs to add to ACL
 $rules = @()
-$rules += New-Object System.Security.AccessControl.FileSystemAccessRule('Admins','Modify','ContainerInherit,ObjectInherit','None','Allow')
+$rules += New-Object System.Security.AccessControl.FileSystemAccessRule('Admins-Modify','Modify','ContainerInherit,ObjectInherit','None','Allow')
 
 # Modify permissions of 'Admins'
 Modify-AclRules -path $adminsPath -rules $rules
@@ -90,7 +89,7 @@ Remove-Inheritance $execPath
 
 #Build array of ACEs to add to ACL
 $rules = @()
-$rules += New-Object System.Security.AccessControl.FileSystemAccessRule('Executives','Modify','ContainerInherit,ObjectInherit','None','Allow')
+$rules += New-Object System.Security.AccessControl.FileSystemAccessRule('Executives-Modify','Modify','ContainerInherit,ObjectInherit','None','Allow')
 
 # Modify permissions of 'Executives'
 Modify-AclRules -path $execPath -rules $rules
@@ -105,7 +104,7 @@ Remove-Inheritance $managerPath
 
 #Build array of ACEs to add to ACL
 $rules = @()
-$rules += New-Object System.Security.AccessControl.FileSystemAccessRule('Managers','Modify','ContainerInherit,ObjectInherit','None','Allow')
+$rules += New-Object System.Security.AccessControl.FileSystemAccessRule('Managers-Modify','Modify','ContainerInherit,ObjectInherit','None','Allow')
 
 # Modify permissions of 'Managers'
 Modify-AclRules -path $managerPath -rules $rules
@@ -120,13 +119,13 @@ Remove-Inheritance $empsPath
 
 #Build array of ACEs to add to ACL
 $rules = @()
-$rules += New-Object System.Security.AccessControl.FileSystemAccessRule('All Employees','Modify','ContainerInherit,ObjectInherit','None','Allow')
+$rules += New-Object System.Security.AccessControl.FileSystemAccessRule('AllEmployees-Modify','Modify','ContainerInherit,ObjectInherit','None','Allow')
 
 # Modify permissions of 'All Employees'
 Modify-AclRules -path $empsPath -rules $rules
 
 <# Share the root folder #>
 New-SMBShare –Name “AWSShares” –Path $rootSharePath `
-    –FullAccess "Admins"  `
-    -ChangeAccess "All Employees" `
+    –FullAccess "Admins-FullAccess"  `
+    -ChangeAccess "AllEmployees-Change" `
     -FolderEnumerationMode AccessBased
