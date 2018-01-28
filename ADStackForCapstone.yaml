@@ -124,8 +124,9 @@ Resources:
             - setup
             - rename
             - installADDS
+            - signalSuccess
             - configureSites
-            - finalize
+            - createAWSGroups
         setup:
           files:
             'c:\cfn\cfn-hup.conf':
@@ -174,6 +175,8 @@ Resources:
                   - ''
             'c:\cfn\scripts\ConvertTo-EnterpriseAdmin.ps1':
               source: 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/ConvertTo-EnterpriseAdmin.ps1'
+            'c:\cfn\scripts\Create-AWSGroups.ps1'
+              source: 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/Create-AWSGroups.ps1'
           services:
             windows:
               cfn-hup:
@@ -254,6 +257,14 @@ Resources:
                     c:\cfn\scripts\ConvertTo-EnterpriseAdmin.ps1 -Members 
                   - !Ref DomainAdminUser
               waitAfterCompletion: '0'
+        signalSuccess:
+          commands:
+            a-signal-success:
+              command: !Join
+                - ''
+                - - cfn-signal.exe -e 0 "
+                  - !Ref DC1WaitHandle
+                  - '"'
         configureSites:
           commands:
             a-rename-default-site:
@@ -305,14 +316,25 @@ Resources:
                     Set-ADReplicationSiteLink -SitesIncluded @{add='AZ2'}
                     -ReplicationFrequencyInMinutes 15"
               waitAfterCompletion: '0'
-        finalize:
+        createAWSGroups:
           commands:
-            a-signal-success:
+            a-create-aws-groups:
               command: !Join
                 - ''
-                - - cfn-signal.exe -e 0 "
-                  - !Ref DC1WaitHandle
-                  - '"'
+                - - powershell.exe -Command "
+                  - 'c:\cfn\scripts\Create-AWSGroups.ps1 -DomainDNSName '
+                  - !Ref DomainDNSName
+                  - ' -UserCredential '
+                  - (New-Object System.Management.Automation.PSCredential('
+                  - !Ref DomainNetBIOSName
+                  - \
+                  - !Ref DomainAdminUser
+                  - ''','
+                  - '(ConvertTo-SecureString '
+                  - ''''
+                  - !Ref DomainAdminPassword
+                  - ''''
+                  - ' -AsPlainText -Force)))' 
     Properties:
       ImageId: !Ref DCImage
       InstanceType: !Ref DCInstanceType
