@@ -124,9 +124,10 @@ Resources:
             - setup
             - rename
             - installADDS
-            - signalSuccess
+            - signalActiveDirectorySuccess
             - configureSites
             - createAWSGroups
+            - finalize
         setup:
           files:
             'c:\cfn\cfn-hup.conf':
@@ -175,7 +176,7 @@ Resources:
                   - ''
             'c:\cfn\scripts\ConvertTo-EnterpriseAdmin.ps1':
               source: 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/ConvertTo-EnterpriseAdmin.ps1'
-            'c:\cfn\scripts\Create-AWSGroups.ps1'
+            'c:\cfn\scripts\Create-AWSGroups.ps1':
               source: 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/Create-AWSGroups.ps1'
           services:
             windows:
@@ -257,13 +258,13 @@ Resources:
                     c:\cfn\scripts\ConvertTo-EnterpriseAdmin.ps1 -Members 
                   - !Ref DomainAdminUser
               waitAfterCompletion: '0'
-        signalSuccess:
+        signalActiveDirectorySuccess:
           commands:
             a-signal-success:
               command: !Join
                 - ''
                 - - cfn-signal.exe -e 0 "
-                  - !Ref DC1WaitHandle
+                  - !Ref ActiveDirectoryWaitHandle
                   - '"'
         configureSites:
           commands:
@@ -334,7 +335,15 @@ Resources:
                   - ''''
                   - !Ref DomainAdminPassword
                   - ''''
-                  - ' -AsPlainText -Force)))' 
+                  - ' -AsPlainText -Force)))"' 
+        finalize:
+          commands:
+            a-signal-success:
+              command: !Join
+                - ''
+                - - cfn-signal.exe -e 0 "
+                  - !Ref DC1WaitHandle
+                  - '"'
     Properties:
       ImageId: !Ref DCImage
       InstanceType: !Ref DCInstanceType
@@ -364,7 +373,7 @@ Resources:
               </script>
   DC2:
     Type: 'AWS::EC2::Instance'
-    DependsOn: DC1WaitCondition
+    DependsOn: ActiveDirectoryWaitCondition
     Metadata:
       'AWS::CloudFormation::Init':
         configSets:
@@ -584,6 +593,14 @@ Resources:
       Handle: !Ref DC1WaitHandle
       Timeout: '3600'
   DC1WaitHandle:
+    Type: 'AWS::CloudFormation::WaitConditionHandle'
+  ActiveDirectoryWaitCondition:
+    Type: 'AWS::CloudFormation::WaitCondition'
+    DependsOn: DC1
+    Properties:
+      Handle: !Ref ActiveDirectoryWaitHandle
+      Timeout: '3600'
+  ActiveDirectoryWaitHandle:
     Type: 'AWS::CloudFormation::WaitConditionHandle'
   DC2WaitCondition:
     Type: 'AWS::CloudFormation::WaitCondition'
@@ -1158,3 +1175,9 @@ Resources:
           CidrIp: 
             Fn::ImportValue:
               !Sub '${NetworkStackName}-PubSub1Cidr'
+Outputs:
+  DomainMemberSG:
+    Description: 'The ID of the security group for domain members.'
+    Value: !Ref DomainMemberSG
+    Export:
+      Name: !Sub "${AWS::StackName}-DomainMemberSG"

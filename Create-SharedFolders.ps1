@@ -48,7 +48,7 @@ function Remove-Inheritance {
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-$rootSharePath = 'c:\AWSShares'
+$rootSharePath = 'z:\AWSShares'
 
 <# Create a new folder on the root of the new, second drive #>
 mkdir $rootSharePath

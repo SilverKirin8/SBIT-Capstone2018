@@ -11,6 +11,11 @@ SECTION_SEPARATOR = '#'*60
 
 networkStackName = 'CapstoneNetworkStack'
 adStackName = 'CapstoneADStack'
+fsStackName = 'CapstoneFSStack'
+
+#Should change these in the future to let user define all of this, skipping for now to save time
+fs1NetBIOSName = 'FS1'
+fs2NetBIOSName = 'FS2'
 
 '''
 DON'T FORGET TO UPDATE CLOUDFORMATION TEMPLATE LOCATIONS
@@ -20,9 +25,15 @@ Var Names:
 vpcTemplateUrl
 '''
 vpcTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/2018022aO1-NetworkStackForCapstone.yaml7ruxj7sxky9'
-adTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/2018028alk-ADStackForCapstone.yamlv0xgd31g4vt'
-ec2 = boto3.resource('ec2') #EC2 object allows connection and manipulation of AWS EC2 resource types
-cloudFormationClient = boto3.client('cloudformation') #CloudFormation client allows creation of AWS resources in a stack by using CloudFormation templates
+adTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/2018028IaK-ADStackForCapstone.yaml38w3jtmbcwf'
+fsTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/2018029UPa-FSStackForCapstone.yaml0wwnsvi6i79'
+
+#EC2 object allows connection and manipulation of AWS EC2 resource types
+ec2 = boto3.resource('ec2')
+#CloudFormation client allows creation of AWS resources in a stack by using CloudFormation templates
+cloudFormationClient = boto3.client('cloudformation')
+#ssmClient allows remote command execution against EC2 instances
+ssmClient = boto3.client('ssm')
 
 def main():
     #Welcome message
@@ -51,6 +62,8 @@ def main():
 	#Build Active Directory and Domain Controllers
     buildADStack(networkStackName, userDomainName, userDomainNetBIOSName, userDomainAdminUsername, userDomainAdminPassword, userRestoreModePassword, userDcInstanceType, userKeyPair)
 	
+	#Build File Servers and configure a Namespace and Replication
+	buildFSStack(networkStackName, adStackName, userDomain, userDomainNetBIOSName, userDomainAdminUsername, userDomainAdminPassword, userFsInstanceType, userVolumeSize, userKeyPair)
     #Build instances...
 
 #Build VPC and other networking resources
@@ -119,9 +132,84 @@ def buildADStack(networkStackName, userDomainName, userDomainNetBIOSName, userDo
 			},
 		],
 	)
-	#adStackWaiter.wait(StackName=adStackResponse['StackId'])
-	print('Testing AD Install...')
-	#print('Active Directory... Build Complete!')
+	adStackWaiter.wait(StackName=adStackResponse['StackId'])
+	print('Active Directory... Build Complete!')
+
+#Build first two File Servers in AD Domain
+def buildFSStack(networkStackName, adStackName, userDomain, userDomainNetBIOSName, userDomainAdminUsername, userDomainAdminPassword, userFsInstanceType, userVolumeSize, userKeyPair):
+	#fsStackWaiter can be called to halt script execution until the specified stack is finished building
+	fsStackWaiter = cloudFormationClient.get_waiter('stack_create_complete')
+	
+	#Print estimated time to completion
+	print('\n' + SECTION_SEPARATOR)
+	print('Building File Servers...')
+	print('Estimated time to completion: ~## min.')
+	
+	fsStackResponse = cloudFormationClient.create_stack(
+		StackName = fsStackName,
+		TemplateURL = fsTemplateUrl,
+		Parameters=[
+			{
+				'ParameterKey' : 'NetworkStackName',
+				'ParameterValue' : networkStackName
+			},
+			{
+				'ParameterKey' : 'ADStackName',
+				'ParameterValue' : adStackName
+			},
+			{
+				'ParameterKey' : 'DomainDNSName',
+				'ParameterValue' : userDomain
+			},
+			{
+				'ParameterKey' : 'DomainNetBIOSName',
+				'ParameterValue' : userDomainNetBIOSName
+			},
+			{
+				'ParameterKey' : 'DomainAdminUser',
+				'ParameterValue' : userDomainAdminUsername
+			},
+			{
+				'ParameterKey' : 'DomainAdminPassword',
+				'ParameterValue' : userDomainAdminPassword
+			},
+			{
+				'ParameterKey' : 'FSInstanceType',
+				'ParameterValue' : userFsInstanceType
+			},
+			{
+				'ParameterKey' : 'FSVolumeSize',
+				'ParameterValue' : userVolumeSize
+			},
+			{
+				'ParameterKey' : 'KeyPair',
+				'ParameterValue' : userKeyPair
+			},
+		],
+	)
+	fsStackWaiter.wait(StackName=fsStackResponse['StackId'])
+	
+	#Send a command to the first File Server, telling it to execute the Configure-Dfs script
+	ssmResponse = ssmClient.send_command(
+		Targets=[
+			{
+				'Key': 'Name',
+				'Values': [
+					fs1NetBIOSName,
+				]
+			},
+		],
+		DocumentName='AWS-RunPowerShellScript',
+		TimeoutSeconds: 3600,
+		Comment='Execute script to configure DFS Namespace and DFS Replication.',
+		Parameters={
+			'commands': [
+				("Invoke-Command -Session (New-PSSession -Credential (New-Object System.Management.Automation.PSCredential('%s\%s',(ConvertTo-SecureString '%s' -AsPlainText -Force)))) -Script { c:\cfn\scripts\Configure-Dfs.ps1 -DomainName '%s' -Fs1NetBiosName '%s' -Fs2NetBiosName '%s' }" % (userDomainNetBIOSName, userDomainAdminUsername, userDomainAdminPassword, userDomain, fs1NetBIOSName, fs2NetBIOSName)),
+			]
+		}
+	)
+	
+	print('File Servers... Build Complete!')
 
 #Prompt for and validate the Domain Name
 def getDomainName(message):

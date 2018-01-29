@@ -44,9 +44,11 @@ Parameters:
   PrimaryAZ:
     Type: String
     Description: 'The Availability Zone of Public Subnet 1 and Private Subnet 1. (Ex. "us-east-2a")'
+    Default: us-east-2a
   SecondaryAZ:
     Type: String
     Description: 'The Availability Zone of Private Subnet 2. (Ex. "us-east-2b")'
+    Default: us-east-2b
   FSInstanceType:
     Type: String
     Description: 'The instance type for the File Servers. Default: t2.micro'
@@ -108,8 +110,11 @@ Resources:
         configSets:
           config:
             - setup
+            - initializeDisk
             - rename
+            - join
             - installDFS
+            - createSharedFolders
             - finalize
         setup:
           files:
@@ -157,6 +162,12 @@ Resources:
                     Get-NetAdapter | Set-DnsClientServerAddress -ServerAddresses
                     $netip.DNSServer.ServerAddresses;
                   - ''
+            'c:\cfn\scripts\Create-SharedFolders.ps1':
+              source: 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/Create-SharedFolders.ps1'
+            'c:\cfn\scripts\Format-AWSDisk.ps1':
+              source: 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/Format-AWSDisk.ps1'
+            'c:\cfn\scripts\Configure-Dfs.ps1':
+              source: 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/Configure-Dfs.ps1'
           services:
             windows:
               cfn-hup:
@@ -173,6 +184,14 @@ Resources:
                     powershell.exe -Command "Get-NetFirewallProfile |
                     Set-NetFirewallProfile -Enabled False"
               waitAfterCompletion: '0'
+        initializeDisk:
+          commands:
+            a-initialize-and-format-disk:
+              command: !Join
+                - ''
+                - - >-
+                    powershell.exe -Command 
+                    c:\cfn\scripts\Format-AWSDisk.ps1
         rename:
           commands:
             a-set-static-ip:
@@ -187,14 +206,66 @@ Resources:
                 - ''
                 - - 'powershell.exe Rename-Computer -NewName '
                   - !Ref FS1NetBIOSName
-                  - ' -Restart'
+                  - ' -Force'
+              waitAfterCompletion: '0'
+        join:
+          commands:
+            a-join-domain:
+              command: !Join
+                - ''
+                - - powershell.exe -Command "
+                  - 'Add-Computer -DomainName '
+                  - !Ref DomainDNSName
+                  - ' -Credential '
+                  - (New-Object System.Management.Automation.PSCredential('
+                  - !Ref DomainNetBIOSName
+                  - \
+                  - !Ref DomainAdminUser
+                  - ''','
+                  - '(ConvertTo-SecureString '
+                  - ''''
+                  - !Ref DomainAdminPassword
+                  - ''''
+                  - ' -AsPlainText -Force))) -Restart'
               waitAfterCompletion: forever
         installDFS:
           commands:
             a-install-dfs:
               command: !Join
                 - ''
-                - Command that installs the DFS Role
+                - - powershell.exe -Command "
+                  - 'Invoke-Command -Session (New-PSSession -Credential '
+                  - (New-Object System.Management.Automation.PSCredential('
+                  - !Ref DomainNetBIOSName
+                  - \
+                  - !Ref DomainAdminUser
+                  - ''','
+                  - '(ConvertTo-SecureString '
+                  - ''''
+                  - !Ref DomainAdminPassword
+                  - ''''
+                  - ' -AsPlainText -Force)))) -Script { '
+                  - 'Install-WindowsFeature FS-DFS-Namespace,FS-DFS-Replication,FS-FileServer,RSAT-DFS-Mgmt-Con -IncludeAllSubFeature'
+                  - ' }"'
+        createSharedFolders:
+          commands:
+            a-create-shared-folders:
+              command: !Join
+                - ''
+                - - powershell.exe -Command "
+                  - 'Invoke-Command -Session (New-PSSession -Credential '
+                  - (New-Object System.Management.Automation.PSCredential('
+                  - !Ref DomainNetBIOSName
+                  - \
+                  - !Ref DomainAdminUser
+                  - ''','
+                  - '(ConvertTo-SecureString '
+                  - ''''
+                  - !Ref DomainAdminPassword
+                  - ''''
+                  - ' -AsPlainText -Force)))) -Script { '
+                  - c:\cfn\scripts\Create-SharedFolders.ps1
+                  - ' }"'
         finalize:
           commands:
             a-signal-success:
@@ -217,7 +288,7 @@ Resources:
           !Sub '${NetworkStackName}-PrivSub1Id'
       Tags:
         - Key: 'Name'
-          Value: 'FS1'
+          Value: !Ref FS1NetBIOSName
       UserData:
         Fn::Join:
             - ''
@@ -240,6 +311,7 @@ Resources:
         configSets:
           config:
             - setup
+            - initializeDisk
             - rename
             - installDFS
             - finalize
@@ -289,6 +361,10 @@ Resources:
                     Get-NetAdapter | Set-DnsClientServerAddress -ServerAddresses
                     $netip.DNSServer.ServerAddresses;
                   - ''
+            'c:\cfn\scripts\Create-SharedFolders.ps1':
+              source: 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/Create-SharedFolders.ps1'
+            'c:\cfn\scripts\Format-AWSDisk.ps1':
+              source: 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/Format-AWSDisk.ps1'
           services:
             windows:
               cfn-hup:
@@ -305,6 +381,14 @@ Resources:
                     powershell.exe -Command "Get-NetFirewallProfile |
                     Set-NetFirewallProfile -Enabled False"
               waitAfterCompletion: '0'
+        initializeDisk:
+          commands:
+            a-initialize-and-format-disk:
+              command: !Join
+                - ''
+                - - >-
+                    powershell.exe -Command 
+                    c:\cfn\scripts\Format-AWSDisk.ps1
         rename:
           commands:
             a-set-static-ip:
@@ -319,14 +403,66 @@ Resources:
                 - ''
                 - - 'powershell.exe Rename-Computer -NewName '
                   - !Ref FS2NetBIOSName
-                  - ' -Restart'
+                  - ' -Force'
+              waitAfterCompletion: '0'
+        join:
+          commands:
+            a-join-domain:
+              command: !Join
+                - ''
+                - - powershell.exe -Command "
+                  - 'Add-Computer -DomainName '
+                  - !Ref DomainDNSName
+                  - ' -Credential '
+                  - (New-Object System.Management.Automation.PSCredential('
+                  - !Ref DomainNetBIOSName
+                  - \
+                  - !Ref DomainAdminUser
+                  - ''','
+                  - '(ConvertTo-SecureString '
+                  - ''''
+                  - !Ref DomainAdminPassword
+                  - ''''
+                  - ' -AsPlainText -Force))) -Restart'
               waitAfterCompletion: forever
         installDFS:
           commands:
             a-install-dfs:
               command: !Join
                 - ''
-                - Command that installs the DFS Role
+                - - powershell.exe -Command "
+                  - 'Invoke-Command -Session (New-PSSession -Credential '
+                  - (New-Object System.Management.Automation.PSCredential('
+                  - !Ref DomainNetBIOSName
+                  - \
+                  - !Ref DomainAdminUser
+                  - ''','
+                  - '(ConvertTo-SecureString '
+                  - ''''
+                  - !Ref DomainAdminPassword
+                  - ''''
+                  - ' -AsPlainText -Force)))) -Script { '
+                  - 'Install-WindowsFeature FS-DFS-Namespace,FS-DFS-Replication,FS-FileServer,RSAT-DFS-Mgmt-Con -IncludeAllSubFeature'
+                  - ' }"'
+        createSharedFolders:
+          commands:
+            a-create-shared-folders:
+              command: !Join
+                - ''
+                - - powershell.exe -Command "
+                  - 'Invoke-Command -Session (New-PSSession -Credential '
+                  - (New-Object System.Management.Automation.PSCredential('
+                  - !Ref DomainNetBIOSName
+                  - \
+                  - !Ref DomainAdminUser
+                  - ''','
+                  - '(ConvertTo-SecureString '
+                  - ''''
+                  - !Ref DomainAdminPassword
+                  - ''''
+                  - ' -AsPlainText -Force)))) -Script { '
+                  - c:\cfn\scripts\Create-SharedFolders.ps1
+                  - ' }"'
         finalize:
           commands:
             a-signal-success:
@@ -349,7 +485,7 @@ Resources:
           !Sub '${NetworkStackName}-PrivSub2Id'
       Tags:
         - Key: 'Name'
-          Value: 'FS2'
+          Value: !Ref FS2NetBIOSName
       UserData:
         Fn::Join:
             - ''
@@ -414,6 +550,16 @@ Resources:
           CidrIp: 
             Fn::ImportValue:
               !Sub '${NetworkStackName}-VpcCidr'
+        - IpProtocol: -1
+          FromPort: -1
+          ToPort: -1
+          SourceSecurityGroupId: !Ref FS2SecurityGroup
+        - IpProtocol: -1
+          FromPort: -1
+          ToPort: -1
+          SourceSecurityGroupId:
+            - Fn::ImportValue:
+                !Sub '${ADStackName}-DomainMemberSG'
   FS2SecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
@@ -429,3 +575,13 @@ Resources:
           CidrIp: 
             Fn::ImportValue:
               !Sub '${NetworkStackName}-VpcCidr'
+        - IpProtocol: -1
+          FromPort: -1
+          ToPort: -1
+          SourceSecurityGroupId: !Ref FS2SecurityGroup
+        - IpProtocol: -1
+          FromPort: -1
+          ToPort: -1
+          SourceSecurityGroupId:
+            - Fn::ImportValue:
+                !Sub '${ADStackName}-DomainMemberSG'
