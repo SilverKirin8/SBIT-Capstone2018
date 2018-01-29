@@ -289,7 +289,7 @@ Resources:
       Tags:
         - Key: 'Name'
           Value: !Ref FS1NetBIOSName
-      UserData:
+      UserData: !Base64
         Fn::Join:
             - ''
             - - |
@@ -313,7 +313,9 @@ Resources:
             - setup
             - initializeDisk
             - rename
+            - join
             - installDFS
+            - createSharedFolders
             - finalize
         setup:
           files:
@@ -486,7 +488,7 @@ Resources:
       Tags:
         - Key: 'Name'
           Value: !Ref FS2NetBIOSName
-      UserData:
+      UserData: !Base64
         Fn::Join:
             - ''
             - - |
@@ -553,13 +555,15 @@ Resources:
         - IpProtocol: -1
           FromPort: -1
           ToPort: -1
-          SourceSecurityGroupId: !Ref FS2SecurityGroup
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-PrivSub2Cidr'
         - IpProtocol: -1
           FromPort: -1
           ToPort: -1
           SourceSecurityGroupId:
-            - Fn::ImportValue:
-                !Sub '${ADStackName}-DomainMemberSG'
+            Fn::ImportValue:
+              !Sub '${ADStackName}-DomainMemberSG'
   FS2SecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
@@ -578,10 +582,12 @@ Resources:
         - IpProtocol: -1
           FromPort: -1
           ToPort: -1
-          SourceSecurityGroupId: !Ref FS2SecurityGroup
+          CidrIp: 
+            Fn::ImportValue:
+              !Sub '${NetworkStackName}-PrivSub1Cidr'
         - IpProtocol: -1
           FromPort: -1
           ToPort: -1
           SourceSecurityGroupId:
-            - Fn::ImportValue:
-                !Sub '${ADStackName}-DomainMemberSG'
+            Fn::ImportValue:
+              !Sub '${ADStackName}-DomainMemberSG'

@@ -22,8 +22,8 @@ DON'T FORGET TO UPDATE CLOUDFORMATION TEMPLATE LOCATIONS
 (Either replace references to or instantiate following vars)
 '''
 vpcTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/2018022aO1-NetworkStackForCapstone.yaml7ruxj7sxky9'
-adTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/2018028IaK-ADStackForCapstone.yaml38w3jtmbcwf'
-fsTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/2018029UPa-FSStackForCapstone.yaml0wwnsvi6i79'
+adTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/2018029g87-ADStackForCapstone.yaml003x5k82ixi5v'
+fsTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/2018029ns2-FSStackForCapstone.yaml2yt5o720upb'
 
 #EC2 object allows connection and manipulation of AWS EC2 resource types
 ec2 = boto3.resource('ec2')
@@ -60,7 +60,7 @@ def main():
     buildADStack(networkStackName, userDomainName, userDomainNetBIOSName, userDomainAdminUsername, userDomainAdminPassword, userRestoreModePassword, userDcInstanceType, userKeyPair)
 	
 	#Build File Servers and configure a Namespace and Replication
-    buildFSStack(networkStackName, adStackName, userDomain, userDomainNetBIOSName, userDomainAdminUsername, userDomainAdminPassword, userFsInstanceType, userVolumeSize, userKeyPair)
+    buildFSStack(networkStackName, adStackName, userDomainName, userDomainNetBIOSName, userDomainAdminUsername, userDomainAdminPassword, userFsInstanceType, userVolumeSize, userKeyPair)
     #Build instances...
 
 #Build VPC and other networking resources
@@ -133,7 +133,7 @@ def buildADStack(networkStackName, userDomainName, userDomainNetBIOSName, userDo
 	print('Active Directory... Build Complete!')
 
 #Build first two File Servers in AD Domain
-def buildFSStack(networkStackName, adStackName, userDomain, userDomainNetBIOSName, userDomainAdminUsername, userDomainAdminPassword, userFsInstanceType, userVolumeSize, userKeyPair):
+def buildFSStack(networkStackName, adStackName, userDomainName, userDomainNetBIOSName, userDomainAdminUsername, userDomainAdminPassword, userFsInstanceType, userVolumeSize, userKeyPair):
     #fsStackWaiter can be called to halt script execution until the specified stack is finished building
     fsStackWaiter = cloudFormationClient.get_waiter('stack_create_complete')
     
@@ -156,7 +156,7 @@ def buildFSStack(networkStackName, adStackName, userDomain, userDomainNetBIOSNam
             },
             {
                 'ParameterKey' : 'DomainDNSName',
-                'ParameterValue' : userDomain
+                'ParameterValue' : userDomainName
             },
             {
                 'ParameterKey' : 'DomainNetBIOSName',
@@ -190,7 +190,7 @@ def buildFSStack(networkStackName, adStackName, userDomain, userDomainNetBIOSNam
     ssmResponse = ssmClient.send_command(
         Targets=[
             {
-                'Key': 'Name',
+                'Key': 'tag:Name',
                 'Values': [
                     fs1NetBIOSName,
                 ]
@@ -201,7 +201,7 @@ def buildFSStack(networkStackName, adStackName, userDomain, userDomainNetBIOSNam
         Comment='Execute script to configure DFS Namespace and DFS Replication.',
         Parameters={
             'commands': [
-                ("Invoke-Command -Session (New-PSSession -Credential (New-Object System.Management.Automation.PSCredential('%s\%s',(ConvertTo-SecureString '%s' -AsPlainText -Force)))) -Script { c:\cfn\scripts\Configure-Dfs.ps1 -DomainName '%s' -Fs1NetBiosName '%s' -Fs2NetBiosName '%s' }" % (userDomainNetBIOSName, userDomainAdminUsername, userDomainAdminPassword, userDomain, fs1NetBIOSName, fs2NetBIOSName)),
+                ("Invoke-Command -Session (New-PSSession -Credential (New-Object System.Management.Automation.PSCredential('%s\%s',(ConvertTo-SecureString '%s' -AsPlainText -Force)))) -Script { c:\cfn\scripts\Configure-Dfs.ps1 -DomainName '%s' -Fs1NetBiosName '%s' -Fs2NetBiosName '%s' }" % (userDomainNetBIOSName, userDomainAdminUsername, userDomainAdminPassword, userDomainName, fs1NetBIOSName, fs2NetBIOSName)),
             ]
         }
     )
@@ -309,7 +309,7 @@ def getVolumeSize(message):
                 validSize = True
         except ValueError:
             print('Invalid input. Please enter a number between %d and %d.' % (MIN_VOLUME_SIZE,MAX_VOLUME_SIZE))
-    return int(userVolumeSize)
+    return userVolumeSize
 
 #Prompt for and validate the instance type for instances
 def getInstanceType(message):

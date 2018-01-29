@@ -323,9 +323,7 @@ Resources:
               command: !Join
                 - ''
                 - - powershell.exe -Command "
-                  - 'c:\cfn\scripts\Create-AWSGroups.ps1 -DomainDNSName '
-                  - !Ref DomainDNSName
-                  - ' -UserCredential '
+                  - 'Invoke-Command -Session (New-PSSession -Credential '
                   - (New-Object System.Management.Automation.PSCredential('
                   - !Ref DomainNetBIOSName
                   - \
@@ -335,7 +333,10 @@ Resources:
                   - ''''
                   - !Ref DomainAdminPassword
                   - ''''
-                  - ' -AsPlainText -Force)))"' 
+                  - ' -AsPlainText -Force)))) -Script { ' 
+                  - 'c:\cfn\scripts\Create-AWSGroups.ps1 -DomainDNSName '
+                  - !Ref DomainDNSName
+                  - ' }"'
         finalize:
           commands:
             a-signal-success:
