@@ -20,20 +20,16 @@ $rFolderName = 'SBITReplicatedFolder'
 $sharedFolderPath = 'z:\AWSShares'
 
 # Create Namespace
-New-DfsnRoot -Path "\\$DomainName\AWSShares" -TargetPath "\\$Fs1NetBiosName.$DomainName\AWSShares" -Type DomainV2 ` 
--Description 'Namespace for file servers created by SBIT.' -EnableAccessBasedEnumeration $true
+New-DfsnRoot -Path "\\$DomainName\AWSShares" -TargetPath "\\$Fs1NetBiosName.$DomainName\AWSShares" -Type DomainV2 -Description 'Namespace for file servers created by SBIT.' -EnableAccessBasedEnumeration $true
 
 # Add additional server(s) to the namespace
-New-DfnsRootTarget -Path "\\$DomainName\AWSShares" -TargetPath "\\$Fs2NetBiosName.$DomainName\AWSShares"
+New-DfsnRootTarget -Path "\\$DomainName\AWSShares" -TargetPath "\\$Fs2NetBiosName.$DomainName\AWSShares"
 
 # Create Replication group, folder, and add computers to group
-New-DfsReplicationGroup -DomainName $DomainName -GroupName $rGroupName | ` 
-New-DfsReplicatedFolder -FolderName $rFolderName -DomainName $DomainName | ` 
-Add-DfsrMember -DomainName $DomainName -ComputerName "$Fs1NetBiosName.$DomainName","$Fs2NetBiosName.$DomainName"
+New-DfsReplicationGroup -DomainName $DomainName -GroupName $rGroupName | New-DfsReplicatedFolder -FolderName $rFolderName -DomainName $DomainName | Add-DfsrMember -DomainName $DomainName -ComputerName "$Fs1NetBiosName.$DomainName","$Fs2NetBiosName.$DomainName"
 
 # Add replication connections (tells servers which members should send/receive replication data)
-Add-DfsrConnection -DomainName $DomainName -GroupName $rGroupName ` 
--SourceComputerName "$Fs1NetBiosName.$DomainName" -DestinationComputerName "$Fs2NetBiosName.$DomainName"
+Add-DfsrConnection -DomainName $DomainName -GroupName $rGroupName -SourceComputerName "$Fs1NetBiosName.$DomainName" -DestinationComputerName "$Fs2NetBiosName.$DomainName"
 
 # Set the membership and content paths to be replicated
 Set-DfsrMembership -GroupName $rGroupName -FolderName $rFolderName -ComputerName "$Fs1NetBiosName.$DomainName" -ContentPath $sharedFolderPath –PrimaryMember $true

@@ -23,7 +23,7 @@ DON'T FORGET TO UPDATE CLOUDFORMATION TEMPLATE LOCATIONS
 '''
 vpcTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/2018022aO1-NetworkStackForCapstone.yaml7ruxj7sxky9'
 adTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/2018029g87-ADStackForCapstone.yaml003x5k82ixi5v'
-fsTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/2018029ns2-FSStackForCapstone.yaml2yt5o720upb'
+fsTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/2018029XbM-FSStackForCapstone.yamlpsrseqqsm4h'
 
 #EC2 object allows connection and manipulation of AWS EC2 resource types
 ec2 = boto3.resource('ec2')
@@ -54,10 +54,10 @@ def main():
     userRestoreModePassword = getPassword('Enter a password for Active Directory Restore Mode: ')
 
     #Build VPC and other networking resources
-    buildNetworkStack()
+#    buildNetworkStack()
 
 	#Build Active Directory and Domain Controllers
-    buildADStack(networkStackName, userDomainName, userDomainNetBIOSName, userDomainAdminUsername, userDomainAdminPassword, userRestoreModePassword, userDcInstanceType, userKeyPair)
+#    buildADStack(networkStackName, userDomainName, userDomainNetBIOSName, userDomainAdminUsername, userDomainAdminPassword, userRestoreModePassword, userDcInstanceType, userKeyPair)
 	
 	#Build File Servers and configure a Namespace and Replication
     buildFSStack(networkStackName, adStackName, userDomainName, userDomainNetBIOSName, userDomainAdminUsername, userDomainAdminPassword, userFsInstanceType, userVolumeSize, userKeyPair)
@@ -89,7 +89,7 @@ def buildADStack(networkStackName, userDomainName, userDomainNetBIOSName, userDo
 	#Print estimated time to completion
 	print('\n' + SECTION_SEPARATOR)
 	print('Building Active Directory...')
-	print('Estimated time to completion: ~28 min.')
+	print('Estimated time to completion: ~30 min.')
 	
 	adStackResponse = cloudFormationClient.create_stack(
 		StackName = adStackName,
@@ -140,7 +140,7 @@ def buildFSStack(networkStackName, adStackName, userDomainName, userDomainNetBIO
     #Print estimated time to completion
     print('\n' + SECTION_SEPARATOR)
     print('Building File Servers...')
-    print('Estimated time to completion: ~## min.')
+    print('Estimated time to completion: ~10 min.')
     
     fsStackResponse = cloudFormationClient.create_stack(
         StackName = fsStackName,
@@ -187,7 +187,7 @@ def buildFSStack(networkStackName, adStackName, userDomainName, userDomainNetBIO
     fsStackWaiter.wait(StackName=fsStackResponse['StackId'])
     
     #Send a command to the first File Server, telling it to execute the Configure-Dfs script
-    ssmResponse = ssmClient.send_command(
+    '''ssmResponse = ssmClient.send_command(
         Targets=[
             {
                 'Key': 'tag:Name',
@@ -204,7 +204,7 @@ def buildFSStack(networkStackName, adStackName, userDomainName, userDomainNetBIO
                 ("Invoke-Command -Session (New-PSSession -Credential (New-Object System.Management.Automation.PSCredential('%s\%s',(ConvertTo-SecureString '%s' -AsPlainText -Force)))) -Script { c:\cfn\scripts\Configure-Dfs.ps1 -DomainName '%s' -Fs1NetBiosName '%s' -Fs2NetBiosName '%s' }" % (userDomainNetBIOSName, userDomainAdminUsername, userDomainAdminPassword, userDomainName, fs1NetBIOSName, fs2NetBIOSName)),
             ]
         }
-    )
+    )'''
     
     print('File Servers... Build Complete!')
 
