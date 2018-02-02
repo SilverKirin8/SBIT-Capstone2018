@@ -191,8 +191,8 @@ Resources:
               command: !Join
                 - ''
                 - - >-
-                    powershell.exe -Command 
-                    c:\cfn\scripts\Format-AWSDisk.ps1
+                    powershell.exe -Command '
+                    c:\cfn\scripts\Format-AWSDisk.ps1'
         rename:
           commands:
             a-set-static-ip:
@@ -276,23 +276,13 @@ Resources:
               command: !Join
                 - ''
                 - - powershell.exe -Command "
-                  - 'Invoke-Command -Session (New-PSSession -Credential '
-                  - (New-Object System.Management.Automation.PSCredential('
-                  - !Ref DomainNetBIOSName
-                  - \
-                  - !Ref DomainAdminUser
-                  - ''','
-                  - '(ConvertTo-SecureString '
-                  - ''''
-                  - !Ref DomainAdminPassword
-                  - ''''
-                  - ' -AsPlainText -Force)))) -Script { c:\cfn\scripts\Configure-Dfs.ps1 -DomainName '
+                  - 'c:\cfn\scripts\Configure-Dfs.ps1 -DomainName '
                   - !Ref DomainDNSName
                   - ' -Fs1NetBiosName '
                   - !Ref FS1NetBIOSName
                   - ' -Fs2NetBiosName '
                   - !Ref FS2NetBIOSName
-                  - ' }"'
+                  - '"'
               waitAfterCompletion: '0'
         finalize:
           commands:
@@ -330,9 +320,6 @@ Resources:
               - |+
               - |
                 </script>
-      Volumes:
-        - VolumeId: !Ref FS1Volume
-          Device: 'xvdf'
   FS2:
     Type: 'AWS::EC2::Instance'
     Metadata:
@@ -418,8 +405,8 @@ Resources:
               command: !Join
                 - ''
                 - - >-
-                    powershell.exe -Command 
-                    c:\cfn\scripts\Format-AWSDisk.ps1
+                    powershell.exe -Command '
+                    c:\cfn\scripts\Format-AWSDisk.ps1'
               waitAfterCompletion: '0'
         rename:
           commands:
@@ -533,27 +520,6 @@ Resources:
               - |+
               - |
                 </script>
-      Volumes:
-      - VolumeId: !Ref FS2Volume
-        Device: 'xvdf'
-  FS1Volume:
-    Type: 'AWS::EC2::Volume'
-    Properties:
-      AvailabilityZone: !Ref PrimaryAZ
-      Size: !Ref FSVolumeSize
-      Tags:
-        - Key: 'Name'
-          Value: 'FS1-Volume2'
-      VolumeType: 'gp2'
-  FS2Volume:
-    Type: 'AWS::EC2::Volume'
-    Properties:
-      AvailabilityZone: !Ref SecondaryAZ
-      Size: !Ref FSVolumeSize
-      Tags:
-        - Key: 'Name'
-          Value: 'FS2-Volume2'
-      VolumeType: 'gp2'
   FS1WaitCondition:
     Type: 'AWS::CloudFormation::WaitCondition'
     DependsOn: FS1

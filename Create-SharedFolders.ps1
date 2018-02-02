@@ -1,4 +1,10 @@
 ﻿# Get the directory path and rules to add to the ACL
+
+param(
+	[String]
+	$DriveLetter = 'c:'
+)
+
 function Modify-AclRules {
     <# Adds the rules specified in the parameter '-rules' to the ACL of the directory found at '-path' #>
     param(
@@ -48,7 +54,7 @@ function Remove-Inheritance {
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-$rootSharePath = 'z:\AWSShares'
+$rootSharePath = "$DriveLetter\AWSShares"
 
 <# Create a new folder on the root of the new, second drive #>
 mkdir $rootSharePath

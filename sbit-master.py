@@ -23,7 +23,9 @@ DON'T FORGET TO UPDATE CLOUDFORMATION TEMPLATE LOCATIONS
 '''
 vpcTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/2018022aO1-NetworkStackForCapstone.yaml7ruxj7sxky9'
 adTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/2018029g87-ADStackForCapstone.yaml003x5k82ixi5v'
-fsTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/2018029XbM-FSStackForCapstone.yamlpsrseqqsm4h'
+fsTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/2018033uOS-FSStackForCapstone.yamldhayj8jhoft'
+''''https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/2018029XbM-FSStackForCapstone.yamlpsrseqqsm4h'
+'''
 
 #EC2 object allows connection and manipulation of AWS EC2 resource types
 ec2 = boto3.resource('ec2')
@@ -54,10 +56,10 @@ def main():
     userRestoreModePassword = getPassword('Enter a password for Active Directory Restore Mode: ')
 
     #Build VPC and other networking resources
-#    buildNetworkStack()
+    buildNetworkStack()
 
 	#Build Active Directory and Domain Controllers
-#    buildADStack(networkStackName, userDomainName, userDomainNetBIOSName, userDomainAdminUsername, userDomainAdminPassword, userRestoreModePassword, userDcInstanceType, userKeyPair)
+    buildADStack(networkStackName, userDomainName, userDomainNetBIOSName, userDomainAdminUsername, userDomainAdminPassword, userRestoreModePassword, userDcInstanceType, userKeyPair)
 	
 	#Build File Servers and configure a Namespace and Replication
     buildFSStack(networkStackName, adStackName, userDomainName, userDomainNetBIOSName, userDomainAdminUsername, userDomainAdminPassword, userFsInstanceType, userVolumeSize, userKeyPair)
@@ -183,6 +185,7 @@ def buildFSStack(networkStackName, adStackName, userDomainName, userDomainNetBIO
                 'ParameterValue' : userKeyPair
             },
         ],
+		OnFailure='DO_NOTHING'
     )
     fsStackWaiter.wait(StackName=fsStackResponse['StackId'])
     
