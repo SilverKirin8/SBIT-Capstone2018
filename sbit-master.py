@@ -12,6 +12,7 @@ SECTION_SEPARATOR = '#'*60
 networkStackName = 'CapstoneNetworkStack'
 adStackName = 'CapstoneADStack'
 fsStackName = 'CapstoneFSStack'
+exchStackName = 'CapstoneExchStack'
 
 #Should change these in the future to let user define all of this, skipping for now to save time
 fs1NetBIOSName = 'FS1'
@@ -26,6 +27,7 @@ adTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us
 fsTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/2018033uOS-FSStackForCapstone.yamldhayj8jhoft'
 ''''https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/2018029XbM-FSStackForCapstone.yamlpsrseqqsm4h'
 '''
+exchTemplateUrl = ''
 
 #EC2 object allows connection and manipulation of AWS EC2 resource types
 ec2 = boto3.resource('ec2')
@@ -50,7 +52,6 @@ def main():
     userDcInstanceType = getInstanceType('Enter the instance type to use for Domain Controllers [Default: t2.micro]: ')
     userFsInstanceType = getInstanceType('Enter the instance type to use for File Servers [Default: t2.micro]: ')
     userExchangeInstanceType = getInstanceType('Enter the instance type to use for Exchange servers [Default: t2.micro]: ')
-    userMiscInstanceType = getInstanceType('Enter the instance type to use for all other servers (VPN, 802.1x Security, Certificate Authority) [Default: t2.micro]: ')
     userDomainAdminUsername = getUsername('Enter a username for the domain administrator account (separate account from the default "Administrator" account): ')
     userDomainAdminPassword = getPassword('Enter a password for the domain administrator account: ')
     userRestoreModePassword = getPassword('Enter a password for Active Directory Restore Mode: ')
@@ -63,7 +64,9 @@ def main():
 	
 	#Build File Servers and configure a Namespace and Replication
     buildFSStack(networkStackName, adStackName, userDomainName, userDomainNetBIOSName, userDomainAdminUsername, userDomainAdminPassword, userFsInstanceType, userVolumeSize, userKeyPair)
-    #Build instances...
+    
+    #Build Exchange server and configure mailboxes
+    buildExchStack(networkStackName, adStackName, userDomainName, userDomainNetBIOSName, userDomainAdminUsername, userDomainAdminPassword, userExchangeInstanceType, userKeyPair)
 
 #Build VPC and other networking resources
 def buildNetworkStack():
@@ -189,28 +192,60 @@ def buildFSStack(networkStackName, adStackName, userDomainName, userDomainNetBIO
     )
     fsStackWaiter.wait(StackName=fsStackResponse['StackId'])
     
-    #Send a command to the first File Server, telling it to execute the Configure-Dfs script
-    '''ssmResponse = ssmClient.send_command(
-        Targets=[
-            {
-                'Key': 'tag:Name',
-                'Values': [
-                    fs1NetBIOSName,
-                ]
-            },
-        ],
-        DocumentName='AWS-RunPowerShellScript',
-        TimeoutSeconds=3600,
-        Comment='Execute script to configure DFS Namespace and DFS Replication.',
-        Parameters={
-            'commands': [
-                ("Invoke-Command -Session (New-PSSession -Credential (New-Object System.Management.Automation.PSCredential('%s\%s',(ConvertTo-SecureString '%s' -AsPlainText -Force)))) -Script { c:\cfn\scripts\Configure-Dfs.ps1 -DomainName '%s' -Fs1NetBiosName '%s' -Fs2NetBiosName '%s' }" % (userDomainNetBIOSName, userDomainAdminUsername, userDomainAdminPassword, userDomainName, fs1NetBIOSName, fs2NetBIOSName)),
-            ]
-        }
-    )'''
-    
     print('File Servers... Build Complete!')
 
+def buildExchStack(networkStackName, adStackName, userDomainName, userDomainNetBIOSName, userDomainAdminUsername, userDomainAdminPassword, userExchangeInstanceType, userKeyPair):
+    #exchStackWaiter can be called to halt script execution until the specified stack is finished building
+    exchStackWaiter = cloudFormationClient.get_waiter('stack_create_complete')
+    
+        #Print estimated time to completion
+    print('\n' + SECTION_SEPARATOR)
+    print('Building Exchange Server...')
+    print('Estimated time to completion: ~### min.')
+    
+    exchStackResponse = cloudFormationClient.create_stack(
+        StackName = exchStackName,
+        TemplateURL = exchTemplateUrl,
+        Parameters=[
+            {
+                'ParameterKey' : 'NetworkStackName',
+                'ParameterValue' : networkStackName
+            },
+            {
+                'ParameterKey' : 'ADStackName',
+                'ParameterValue' : adStackName
+            },
+            {
+                'ParameterKey' : 'DomainDNSName',
+                'ParameterValue' : userDomainName
+            },
+            {
+                'ParameterKey' : 'DomainNetBIOSName',
+                'ParameterValue' : userDomainNetBIOSName
+            },
+            {
+                'ParameterKey' : 'DomainAdminUser',
+                'ParameterValue' : userDomainAdminUsername
+            },
+            {
+                'ParameterKey' : 'DomainAdminPassword',
+                'ParameterValue' : userDomainAdminPassword
+            },
+            {
+                'ParameterKey' : 'ExchInstanceType',
+                'ParameterValue' : userFsInstanceType
+            },
+            {
+                'ParameterKey' : 'KeyPair',
+                'ParameterValue' : userKeyPair
+            },
+        ],
+    )
+    exchStackWaiter.wait(StackName=exchStackResponse['StackId'])
+    
+    print('Exchange Server... Build Complete!')
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #Prompt for and validate the Domain Name
 def getDomainName(message):
     validDomain = False
