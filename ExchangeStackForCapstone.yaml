@@ -144,6 +144,9 @@ Resources:
             'c:\cfn\downloads\ExchangeServer2016-x64-cu8.iso':
               source: >-
                 https://download.microsoft.com/download/1/F/7/1F777B44-32CB-4F3D-B486-3D0F566D79A9/ExchangeServer2016-x64-cu8.iso
+            'c:\cfn\downloads\Exchange2016-x64.exe':
+              source: >-
+                https://download.microsoft.com/download/3/9/B/39B8DDA8-509C-4B9E-BCE9-4CD8CDC9A7DA/Exchange2016-x64.exe
           services:
             windows:
               cfn-hup:
@@ -202,6 +205,7 @@ Resources:
                 - - cfn-signal.exe -e 0 "
                   - !Ref JoinWaitHandle
                   - '"'
+              waitAfterCompletion: '0'
         installExchange:
           commands:
             a-install-prereqs:
@@ -246,7 +250,60 @@ Resources:
                 - - cfn-signal.exe -e 0 "
                   - !Ref PrereqWaitHandle
                   - '"'
-            d-mount-exchange-media:
+              waitAfterCompletion: '0'
+            d-expand-exchange:
+              command: !Join
+                - ''
+                - - powershell.exe -Command "Invoke-Command -Script {
+                  - Start-Process cmd.exe '/c c:\cfn\downloads\Exchange2013-x64.exe /extract:c:\cfn\downloads /passive' -NoNewWindow -Wait}
+                  - ' -ComputerName '
+                  - !Ref ExchNetBIOSName
+                  - ' -Credential '
+                  - (New-Object System.Management.Automation.PSCredential('
+                  - !Ref DomainNetBIOSName
+                  - \
+                  - !Ref DomainAdminUser
+                  - ''','
+                  - '(ConvertTo-SecureString '
+                  - ''''
+                  - !Ref DomainAdminPassword
+                  - ''''
+                  - ' -AsPlainText -Force)))"'
+              waitAfterCompletion: '0'
+            e-signal-success:
+              command: !Join
+                - ''
+                - - cfn-signal.exe -e 0 "
+                  - !Ref ExtractWaitHandle
+                  - '"'
+              waitAfterCompletion: '0'
+            f-prepare-ad:
+              command: !Join
+                - ''
+                - - powershell.exe -Command "Invoke-Command -Script {
+                  - Invoke-Expression ^"c:\cfn\downloads\Setup.exe /PrepareAD /OrganizationName:SBITExchange /IAcceptExchangeServerLicenseTerms^"
+                  - '} -ComputerName '
+                  - !Ref ExchNetBIOSName
+                  - ' -Credential '
+                  - (New-Object System.Management.Automation.PSCredential('
+                  - !Ref DomainNetBIOSName
+                  - \
+                  - !Ref DomainAdminUser
+                  - ''','
+                  - '(ConvertTo-SecureString '
+                  - ''''
+                  - !Ref DomainAdminPassword
+                  - ''''
+                  - ' -AsPlainText -Force)))"'
+              waitAfterCompletion: '0'
+            g-signal-success:
+              command: !Join
+                - ''
+                - - cfn-signal.exe -e 0 "
+                  - !Ref PrepADWaitHandle
+                  - '"'
+              waitAfterCompletion: '0'
+            h-mount-exchange-media:
               command: !Join
                 - ''
                 - - powershell.exe -Command "
@@ -271,44 +328,19 @@ Resources:
                   - ''''
                   - ' -AsPlainText -Force)))"'
               waitAfterCompletion: '0'
-            e-signal-success:
+            i-signal-success:
               command: !Join
                 - ''
                 - - cfn-signal.exe -e 0 "
                   - !Ref MountWaitHandle
                   - '"'
-            f-prepare-ad:
-              command: !Join
-                - ''
-                - - powershell.exe -Command "Invoke-Command -Script {
-                  - '$exchDriveLetter = Get-Content c:\cfn\driveletter.txt; '
-                  - Invoke-Expression `"$exchDriveLetter\Setup.exe /PrepareAD /OrganizationName:SBITExchange /IAcceptExchangeServerLicenseTerms`"
-                  - '} -ComputerName '
-                  - !Ref ExchNetBIOSName
-                  - ' -Credential '
-                  - (New-Object System.Management.Automation.PSCredential('
-                  - !Ref DomainNetBIOSName
-                  - \
-                  - !Ref DomainAdminUser
-                  - ''','
-                  - '(ConvertTo-SecureString '
-                  - ''''
-                  - !Ref DomainAdminPassword
-                  - ''''
-                  - ' -AsPlainText -Force)))"'
               waitAfterCompletion: '0'
-            g-signal-success:
-              command: !Join
-                - ''
-                - - cfn-signal.exe -e 0 "
-                  - !Ref PrepADWaitHandle
-                  - '"'
-            h-install-exchange:
+            j-install-exchange:
               command: !Join
                 - ''
                 - - powershell.exe -Command "Invoke-Command -Script {
                   - '$exchDriveLetter = Get-Content c:\cfn\driveletter.txt; '
-                  - Invoke-Expression `"$exchDriveLetter\Setup.EXE /mode:Install /role:Mailbox /MdbName:DB1 /DbFilePath:'C:\Databases\DB1\DB1.edb' /LogFolderPath:'C:\Databases\DB1' /InstallWindowsComponents /IAcceptExchangeServerLicenseTerms`"}
+                  - Invoke-Expression ^"$exchDriveLetter\Setup.EXE /mode:Install /role:Mailbox /MdbName:DB1 /DbFilePath:'C:\Databases\DB1\DB1.edb' /LogFolderPath:'C:\Databases\DB1' /InstallWindowsComponents /IAcceptExchangeServerLicenseTerms^"}
                   - ' -ComputerName '
                   - !Ref ExchNetBIOSName
                   - ' -Credential '
@@ -323,12 +355,13 @@ Resources:
                   - ''''
                   - ' -AsPlainText -Force)))"'
               waitAfterCompletion: '0'
-            i-signal-success:
+            k-signal-success:
               command: !Join
                 - ''
                 - - cfn-signal.exe -e 0 "
                   - !Ref InstallWaitHandle
                   - '"'
+              waitAfterCompletion: '0'
         createMailboxes:
           commands:
             a-create-mailboxes:
@@ -372,6 +405,7 @@ Resources:
                 - - cfn-signal.exe -e 0 "
                   - !Ref MailboxWaitHandle
                   - '"'
+              waitAfterCompletion: '0'
         finalize:
           commands:
             a-signal-success:
@@ -380,6 +414,7 @@ Resources:
                 - - cfn-signal.exe -e 0 "
                   - !Ref ExchWaitHandle
                   - '"'
+              waitAfterCompletion: '0'
     Properties:
       ImageId: !Ref ExchImage
       InstanceType: !Ref ExchInstanceType
@@ -462,6 +497,14 @@ Resources:
       Handle: !Ref MailboxWaitHandle
       Timeout: '14400'
   MailboxWaitHandle:
+    Type: 'AWS::CloudFormation::WaitConditionHandle'
+  ExtractWaitCondition:
+    Type: 'AWS::CloudFormation::WaitCondition'
+    DependsOn: EXCH1
+    Properties:
+      Handle: !Ref ExtractWaitHandle
+      Timeout: '14400'
+  ExtractWaitHandle:
     Type: 'AWS::CloudFormation::WaitConditionHandle'
   ExchSecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
