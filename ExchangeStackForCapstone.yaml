@@ -255,7 +255,7 @@ Resources:
               command: !Join
                 - ''
                 - - powershell.exe -Command "Invoke-Command -Script {
-                  - Start-Process cmd.exe '/c c:\cfn\downloads\Exchange2013-x64.exe /extract:c:\cfn\downloads /passive' -NoNewWindow -Wait}
+                  - Start-Process cmd.exe '/c c:\cfn\downloads\Exchange2016-x64.exe /extract:c:\cfn\downloads /passive' -NoNewWindow -Wait}
                   - ' -ComputerName '
                   - !Ref ExchNetBIOSName
                   - ' -Credential '
@@ -281,7 +281,7 @@ Resources:
               command: !Join
                 - ''
                 - - powershell.exe -Command "Invoke-Command -Script {
-                  - Invoke-Expression ^"c:\cfn\downloads\Setup.exe /PrepareAD /OrganizationName:SBITExchange /IAcceptExchangeServerLicenseTerms^"
+                  - Invoke-Expression 'c:\cfn\downloads\setup.exe /PrepareAD /OrganizationName:SBITExchange /IAcceptExchangeServerLicenseTerms'
                   - '} -ComputerName '
                   - !Ref ExchNetBIOSName
                   - ' -Credential '
@@ -447,7 +447,7 @@ Resources:
     DependsOn: EXCH1
     Properties:
       Handle: !Ref ExchWaitHandle
-      Timeout: '3600'
+      Timeout: '14400'
   ExchWaitHandle:
     Type: 'AWS::CloudFormation::WaitConditionHandle'
   JoinWaitCondition:
