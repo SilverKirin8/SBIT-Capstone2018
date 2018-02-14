@@ -138,15 +138,20 @@ Resources:
                     Get-NetAdapter | Set-DnsClientServerAddress -ServerAddresses
                     $netip.DNSServer.ServerAddresses;
                   - ''
+            'c:\cfn\scripts\Prepare-ActiveDirectory.ps1':
+              content: !Join
+                - ''
+                - - Invoke-Command -Script {
+                  - '$exchDriveLetter = Get-Content c:\cfn\driveletter.txt; '
+                  - Invoke-Expression "$exchDriveLetter\Setup.EXE /PrepareAD /OrganizationName:SBITExchange /IAcceptExchangeServerLicenseTerms";
+                  - return "Done."
+                  - '}'
             'c:\cfn\downloads\UcmaRuntimeSetup.exe':
               source: >-
                 http://download.microsoft.com/download/2/C/4/2C47A5C1-A1F3-4843-B9FE-84C0032C61EC/UcmaRuntimeSetup.exe
             'c:\cfn\downloads\ExchangeServer2016-x64-cu8.iso':
               source: >-
                 https://download.microsoft.com/download/1/F/7/1F777B44-32CB-4F3D-B486-3D0F566D79A9/ExchangeServer2016-x64-cu8.iso
-            'c:\cfn\downloads\Exchange2016-x64.exe':
-              source: >-
-                https://download.microsoft.com/download/3/9/B/39B8DDA8-509C-4B9E-BCE9-4CD8CDC9A7DA/Exchange2016-x64.exe
           services:
             windows:
               cfn-hup:
@@ -251,59 +256,7 @@ Resources:
                   - !Ref PrereqWaitHandle
                   - '"'
               waitAfterCompletion: '0'
-            d-expand-exchange:
-              command: !Join
-                - ''
-                - - powershell.exe -Command "Invoke-Command -Script {
-                  - Start-Process cmd.exe '/c c:\cfn\downloads\Exchange2016-x64.exe /extract:c:\cfn\downloads /passive' -NoNewWindow -Wait}
-                  - ' -ComputerName '
-                  - !Ref ExchNetBIOSName
-                  - ' -Credential '
-                  - (New-Object System.Management.Automation.PSCredential('
-                  - !Ref DomainNetBIOSName
-                  - \
-                  - !Ref DomainAdminUser
-                  - ''','
-                  - '(ConvertTo-SecureString '
-                  - ''''
-                  - !Ref DomainAdminPassword
-                  - ''''
-                  - ' -AsPlainText -Force)))"'
-              waitAfterCompletion: '0'
-            e-signal-success:
-              command: !Join
-                - ''
-                - - cfn-signal.exe -e 0 "
-                  - !Ref ExtractWaitHandle
-                  - '"'
-              waitAfterCompletion: '0'
-            f-prepare-ad:
-              command: !Join
-                - ''
-                - - powershell.exe -Command "Invoke-Command -Script {
-                  - Invoke-Expression 'c:\cfn\downloads\setup.exe /PrepareAD /OrganizationName:SBITExchange /IAcceptExchangeServerLicenseTerms'
-                  - '} -ComputerName '
-                  - !Ref ExchNetBIOSName
-                  - ' -Credential '
-                  - (New-Object System.Management.Automation.PSCredential('
-                  - !Ref DomainNetBIOSName
-                  - \
-                  - !Ref DomainAdminUser
-                  - ''','
-                  - '(ConvertTo-SecureString '
-                  - ''''
-                  - !Ref DomainAdminPassword
-                  - ''''
-                  - ' -AsPlainText -Force)))"'
-              waitAfterCompletion: '0'
-            g-signal-success:
-              command: !Join
-                - ''
-                - - cfn-signal.exe -e 0 "
-                  - !Ref PrepADWaitHandle
-                  - '"'
-              waitAfterCompletion: '0'
-            h-mount-exchange-media:
+            d-mount-exchange-media:
               command: !Join
                 - ''
                 - - powershell.exe -Command "
@@ -328,19 +281,31 @@ Resources:
                   - ''''
                   - ' -AsPlainText -Force)))"'
               waitAfterCompletion: '0'
-            i-signal-success:
+            e-signal-success:
               command: !Join
                 - ''
                 - - cfn-signal.exe -e 0 "
                   - !Ref MountWaitHandle
                   - '"'
               waitAfterCompletion: '0'
-            j-install-exchange:
+            f-prepare-ad:
+              command: !Join
+                - ''
+                - - powershell.exe -Command "Start-Process powershell.exe '-NoProfile -Command \"$complete = c:\cfn\scripts\Prepare-ActiveDirectory.ps1\"' -Verb RunAs"
+              waitAfterCompletion: '0'
+            g-signal-success:
+              command: !Join
+                - ''
+                - - cfn-signal.exe -e 0 "
+                  - !Ref PrepADWaitHandle
+                  - '"'
+              waitAfterCompletion: '0'
+            h-install-exchange:
               command: !Join
                 - ''
                 - - powershell.exe -Command "Invoke-Command -Script {
                   - '$exchDriveLetter = Get-Content c:\cfn\driveletter.txt; '
-                  - Invoke-Expression ^"$exchDriveLetter\Setup.EXE /mode:Install /role:Mailbox /MdbName:DB1 /DbFilePath:'C:\Databases\DB1\DB1.edb' /LogFolderPath:'C:\Databases\DB1' /InstallWindowsComponents /IAcceptExchangeServerLicenseTerms^"}
+                  - Invoke-Expression \"$exchDriveLetter\Setup.EXE /mode:Install /role:Mailbox /MdbName:DB1 /DbFilePath:'C:\Databases\DB1\DB1.edb' /LogFolderPath:'C:\Databases\DB1' /InstallWindowsComponents /IAcceptExchangeServerLicenseTerms\"}
                   - ' -ComputerName '
                   - !Ref ExchNetBIOSName
                   - ' -Credential '
@@ -355,7 +320,7 @@ Resources:
                   - ''''
                   - ' -AsPlainText -Force)))"'
               waitAfterCompletion: '0'
-            k-signal-success:
+            i-signal-success:
               command: !Join
                 - ''
                 - - cfn-signal.exe -e 0 "
