@@ -181,19 +181,12 @@ Resources:
                 - ''
                 - - >-
                     powershell.exe -Command "c:\cfn\scripts\Mount-Exchange.ps1"
-                  - |+
-                  
+                  - ' && '
                   - >-
                     powershell.exe -Command Start-Process powershell.exe '-NoProfile -Command "c:\cfn\scripts\Prepare-ActiveDirectory.ps1"' -Verb RunAs
-                  - |+
-                  
+                  - ' && '
                   - >-
-                    timeout /t 600 /nobreak
-                  
-                  - >-
-                    powershell.exe -Command Start-Process powershell.exe '-NoProfile -Command "c:\cnf\scripts\Install-Exchange.ps1"' -Verb RunAs
-                  - |+
-                  
+                    powershell.exe -Command Start-Process powershell.exe '-NoProfile -Command "c:\cfn\scripts\Install-Exchange.ps1"' -Verb RunAs
             'c:\cfn\scripts\Enable-AutoLogon.ps1':
               source: >-
                 https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/Enable-AutoLogon.ps1
@@ -326,7 +319,7 @@ Resources:
               command: powershell.exe -command Restart-Computer -Force
               waitAfterCompletion: forever
             f-wait:
-              command: powershell.exe -command Start-Sleep -Seconds 1800
+              command: powershell.exe -command Start-Sleep -Seconds 3600
               waitAfterCompletion: '0'
             g-disable-autologon:
               command: !Join
