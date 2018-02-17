@@ -12,12 +12,15 @@ param(
 
     [string]
     [Parameter(Mandatory=$true)]
-    $Fs2NetBiosName
+    $Fs2NetBiosName,
+
+    [string]
+    [Parameter()]
+    $SharedFolderPath = 'c:\AWSShares'
 )
 
 $rGroupName = 'SBITReplicationGroup'
 $rFolderName = 'SBITReplicatedFolder'
-$sharedFolderPath = 'z:\AWSShares'
 
 # Create Namespace
 New-DfsnRoot -Path "\\$DomainName\AWSShares" -TargetPath "\\$Fs1NetBiosName.$DomainName\AWSShares" -Type DomainV2 -Description 'Namespace for file servers created by SBIT.' -EnableAccessBasedEnumeration $true
@@ -32,5 +35,5 @@ New-DfsReplicationGroup -DomainName $DomainName -GroupName $rGroupName | New-Dfs
 Add-DfsrConnection -DomainName $DomainName -GroupName $rGroupName -SourceComputerName "$Fs1NetBiosName.$DomainName" -DestinationComputerName "$Fs2NetBiosName.$DomainName"
 
 # Set the membership and content paths to be replicated
-Set-DfsrMembership -GroupName $rGroupName -FolderName $rFolderName -ComputerName "$Fs1NetBiosName.$DomainName" -ContentPath $sharedFolderPath –PrimaryMember $true
-Set-DfsrMembership -GroupName $rGroupName -FolderName $rFolderName -ComputerName "$Fs2NetBiosName.$DomainName" -ContentPath $sharedFolderPath
+Set-DfsrMembership -GroupName $rGroupName -FolderName $rFolderName -ComputerName "$Fs1NetBiosName.$DomainName" -ContentPath $SharedFolderPath –PrimaryMember $true
+Set-DfsrMembership -GroupName $rGroupName -FolderName $rFolderName -ComputerName "$Fs2NetBiosName.$DomainName" -ContentPath $SharedFolderPath

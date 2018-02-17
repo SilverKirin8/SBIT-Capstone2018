@@ -114,7 +114,7 @@ Resources:
                   - |
                     triggers=post.update
                   - |
-                    path=Resources.EXCH.Metadata.AWS::CloudFormation::Init
+                    path=Resources.EXCH1.Metadata.AWS::CloudFormation::Init
                   - 'action=cfn-init.exe -v -c config -s '
                   - !Ref 'AWS::StackId'
                   - ' -r EXCH1'
@@ -176,17 +176,9 @@ Resources:
                   - '$exchDriveLetter = Get-Content c:\cfn\driveletter.txt; '
                   - Invoke-Expression "$exchDriveLetter\Setup.exe /mode:Install /role:Mailbox /MdbName:DB1 /DbFilePath:'C:\Databases\DB1\DB1.edb' /LogFolderPath:'C:\Databases\DB1' /InstallWindowsComponents /IAcceptExchangeServerLicenseTerms"
                   - '}'
-            'c:\cfn\scripts\Install.bat':
-              content: !Join
-                - ''
-                - - >-
-                    powershell.exe -Command "c:\cfn\scripts\Mount-Exchange.ps1"
-                  - ' && '
-                  - >-
-                    powershell.exe -Command Start-Process powershell.exe '-NoProfile -Command "c:\cfn\scripts\Prepare-ActiveDirectory.ps1"' -Verb RunAs
-                  - ' && '
-                  - >-
-                    powershell.exe -Command Start-Process powershell.exe '-NoProfile -Command "c:\cfn\scripts\Install-Exchange.ps1"' -Verb RunAs
+            'c:\cfn\scripts\ExchangeInstall.bat':
+              source: >-
+                https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/ExchangeInstall.bat
             'c:\cfn\scripts\Enable-AutoLogon.ps1':
               source: >-
                 https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/Enable-AutoLogon.ps1
@@ -273,7 +265,7 @@ Resources:
                   - 'Web-Lgcy-Mgmt-Console, Web-Metabase, Web-Mgmt-Console, Web-Mgmt-Service, '
                   - 'Web-Net-Ext45, Web-Request-Monitor, Web-Server, Web-Stat-Compression, '
                   - 'Web-Static-Content, Web-Windows-Auth, Web-WMI, Windows-Identity-Foundation, '
-                  - 'RSAT-ADDS"'
+                  - 'RSAT-ADDS -Restart"'
               waitAfterCompletion: '0'
             b-install-ucma-runtime:
               command: !Join
@@ -313,7 +305,7 @@ Resources:
                   - !Ref DomainAdminUser
                   - ' -Password '
                   - !Ref DomainAdminPassword
-                  - ' -StartupScript c:\cfn\scripts\Install.bat'
+                  - ' -StartupScript c:\cfn\scripts\ExchangeInstall.bat'
               waitAfterCompletion: '0'
             e-reboot:
               command: powershell.exe -command Restart-Computer -Force
@@ -324,7 +316,7 @@ Resources:
             g-disable-autologon:
               command: !Join
                 - ''
-                - - 'powershell.exe -Command c:\cnf\scripts\Disable-AutoLogon.ps1'
+                - - 'powershell.exe -Command c:\cfn\scripts\Disable-AutoLogon.ps1'
             h-signal-success:
               command: !Join
                 - ''
@@ -441,7 +433,7 @@ Resources:
     DependsOn: EXCH1
     Properties:
       Handle: !Ref PrepAndInstallWaitHandle
-      Timeout: '3600'
+      Timeout: '14400'
   PrepAndInstallWaitHandle:
     Type: 'AWS::CloudFormation::WaitConditionHandle'
   MailboxWaitCondition:
@@ -449,7 +441,7 @@ Resources:
     DependsOn: EXCH1
     Properties:
       Handle: !Ref MailboxWaitHandle
-      Timeout: '3600'
+      Timeout: '14400'
   MailboxWaitHandle:
     Type: 'AWS::CloudFormation::WaitConditionHandle'
   ExchSecurityGroup:

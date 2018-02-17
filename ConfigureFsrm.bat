@@ -1,0 +1,1 @@
+powershell.exe -Command Start-Process powershell.exe '-NoProfile -Command "c:\cfn\scripts\Configure-Fsrm.ps1"' -Verb RunAs

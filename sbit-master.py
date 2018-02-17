@@ -9,6 +9,11 @@ MIN_VOLUME_SIZE=1
 
 SECTION_SEPARATOR = '#'*60
 
+'''
+Add prompts for these for presentation
+    Video with other names
+	Live demo with defaults
+'''
 networkStackName = 'CapstoneNetworkStack'
 adStackName = 'CapstoneADStack'
 fsStackName = 'CapstoneFSStack'
@@ -24,10 +29,8 @@ DON'T FORGET TO UPDATE CLOUDFORMATION TEMPLATE LOCATIONS
 '''
 vpcTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/2018022aO1-NetworkStackForCapstone.yaml7ruxj7sxky9'
 adTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/2018029g87-ADStackForCapstone.yaml003x5k82ixi5v'
-fsTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/2018033uOS-FSStackForCapstone.yamldhayj8jhoft'
-''''https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/2018029XbM-FSStackForCapstone.yamlpsrseqqsm4h'
-'''
-exchTemplateUrl = ''
+fsTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/20180483y4-FSStackForCapstone.yamlusf96fiw3se'
+exchTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/2018048HWO-ExchangeStackForCapstone.yamlfrs9scnug1q'
 
 #EC2 object allows connection and manipulation of AWS EC2 resource types
 ec2 = boto3.resource('ec2')
@@ -63,10 +66,15 @@ def main():
     buildADStack(networkStackName, userDomainName, userDomainNetBIOSName, userDomainAdminUsername, userDomainAdminPassword, userRestoreModePassword, userDcInstanceType, userKeyPair)
 	
 	#Build File Servers and configure a Namespace and Replication
-    buildFSStack(networkStackName, adStackName, userDomainName, userDomainNetBIOSName, userDomainAdminUsername, userDomainAdminPassword, userFsInstanceType, userVolumeSize, userKeyPair)
+    #buildFSStack(networkStackName, adStackName, userDomainName, userDomainNetBIOSName, userDomainAdminUsername, userDomainAdminPassword, userFsInstanceType, userVolumeSize, userKeyPair)
     
     #Build Exchange server and configure mailboxes
     buildExchStack(networkStackName, adStackName, userDomainName, userDomainNetBIOSName, userDomainAdminUsername, userDomainAdminPassword, userExchangeInstanceType, userKeyPair)
+
+    #Announce script completion
+    print(SECTION_SEPARATOR)
+    print('Build complete!!!\nEnjoy your new servers!\n(For more information, see the Documentation.)')
+    print(SECTION_SEPARATOR)
 
 #Build VPC and other networking resources
 def buildNetworkStack():
@@ -233,7 +241,7 @@ def buildExchStack(networkStackName, adStackName, userDomainName, userDomainNetB
             },
             {
                 'ParameterKey' : 'ExchInstanceType',
-                'ParameterValue' : userFsInstanceType
+                'ParameterValue' : userExchangeInstanceType
             },
             {
                 'ParameterKey' : 'KeyPair',

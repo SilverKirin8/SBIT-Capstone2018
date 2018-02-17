@@ -113,10 +113,10 @@ Resources:
             - initializeDisk
             - rename
             - join
-            - installFSRM
+            - configureFSRM
             - installDFS
             - createSharedFolders
-            - configureFsrmAndDfs
+            - runCreateDfsScript
             - finalize
         setup:
           files:
@@ -165,66 +165,13 @@ Resources:
                     $netip.DNSServer.ServerAddresses;
                   - ''
             'c:\cfn\scripts\Configure-Fsrm.ps1':
-              content: !Join
-                - ''
-                - - (Get-Date).ToString() >> c:\cfn\log\fsStatus.txt; $SmtpServer="EXCH1.
-                  - !Ref DomainDNSName
-                  - '"; '
-                  - $AdminEmailAddress="
-                  - !Ref DomainAdminUser
-                  - '@'
-                  - !Ref DomainDNSName
-                  - '"; '
-                  - $VolumeSize="
-                  - !Ref FSVolumeSize
-                  - 'GB"; '
-                  - $QuotaPath="c:\AWSShares"
-                  - '; '
-                  - 'Set-FsrmSetting -SmtpServer $SmtpServer -AdminEmailAddress $AdminEmailAddress; '
-                  - '$Action = New-FsrmAction -Type Email -MailTo $AdminEmailAddress -RunLimitInterval 120 '
-                  - '-Subject "Warning: Running Out of Disk Space on FS1!" '
-                  - '-Body "You are about to reach the end of your available storage on FS1. You can add more storage or delete old, unused files." '
-                  - '-Confirm:$false; '
-                  - '$Threshold = New-FsrmQuotaThreshold -Percentage 90 -Action $Action -Confirm:$false; '
-                  - 'New-FSRMQuota -Path $QuotaPath -Size ($VolumeSize/1) -Threshold $Threshold '
-                  - '-Description "This quota monitors the shared SBIT volume and warns when the volume has only 10% free space." '
-                  - '-Confirm:$false; (Get-Date).ToString() >> c:\cfn\log\fsStatus.txt'
-            'c:\cfn\scripts\Configure-Dfs.ps1':
-              content: !Join
-                - ''
-                - - (Get-Date).ToString() >> c:\cfn\log\fsStatus.txt; $DomainName="
-                  - !Ref DomainDNSName
-                  - '"; '
-                  - $Fs1NetBiosName="
-                  - !Ref FS1NetBIOSName
-                  - '"; '
-                  - $Fs2NetBiosName="
-                  - !Ref FS2NetBIOSName
-                  - '"; '
-                  - '$rGroupName="SBITReplicationGroup"; '
-                  - '$rFolderName="SBITReplicatedFolder"; '
-                  - 'New-DfsnRoot -Path "\\$DomainName\AWSShares" -TargetPath "\\$Fs1NetBiosName.$DomainName\AWSShares" -Type DomainV2 '
-                  - '-Description "Namespace for file servers created by SBIT." -EnableAccessBasedEnumeration $true; '
-                  - 'New-DfsnRootTarget -Path "\\$DomainName\AWSShares" -TargetPath "\\$Fs2NetBiosName.$DomainName\AWSShares"; '
-                  - 'New-DfsReplicationGroup -DomainName $DomainName -GroupName $rGroupName | '
-                  - 'New-DfsReplicatedFolder -FolderName $rFolderName -DomainName $DomainName | '
-                  - 'Add-DfsrMember -DomainName $DomainName -ComputerName "$Fs1NetBiosName.$DomainName","$Fs2NetBiosName.$DomainName"; '
-                  - 'Add-DfsrConnection -DomainName $DomainName -GroupName $rGroupName '
-                  - '-SourceComputerName "$Fs1NetBiosName.$DomainName" -DestinationComputerName "$Fs2NetBiosName.$DomainName"; '
-                  - 'Set-DfsrMembership -GroupName $rGroupName -FolderName $rFolderName -ComputerName "$Fs1NetBiosName.$DomainName" '
-                  - '-ContentPath $SharedFolderPath –PrimaryMember $true; '
-                  - 'Set-DfsrMembership -GroupName $rGroupName -FolderName $rFolderName -ComputerName "$Fs2NetBiosName.$DomainName" '
-                  - '-ContentPath $SharedFolderPath; (Get-Date).ToString() >> c:\cfn\log\fsStatus.txt'
-            'c:\cfn\scripts\ConfigureFsrmAndDfs.bat':
-              source: 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/ConfigureFsrmAndDfs.bat'
-            'c:\cfn\scripts\Enable-AutoLogon.ps1':
-              source: 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/Enable-AutoLogon.ps1'
-            'c:\cfn\scripts\Disable-AutoLogon.ps1':
-              source: 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/Disable-AutoLogon.ps1'
+              source: 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/Configure-Fsrm.ps1'
             'c:\cfn\scripts\Create-SharedFolders.ps1':
               source: 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/Create-SharedFolders.ps1'
             'c:\cfn\scripts\Format-AWSDisk.ps1':
               source: 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/Format-AWSDisk.ps1'
+            'c:\cfn\scripts\Configure-Dfs.ps1':
+              source: 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/Configure-Dfs.ps1'
           services:
             windows:
               cfn-hup:
@@ -285,13 +232,25 @@ Resources:
                   - ''''
                   - ' -AsPlainText -Force))) -Restart'
               waitAfterCompletion: forever
-        installFSRM:
+        configureFSRM:
           commands:
             a-install-fsrm:
               command: !Join
                 - ''
                 - - powershell.exe -Command "Install-WindowsFeature FS-Resource-Manager -IncludeManagementTools"
-              waitAfterCompletion: '0'
+            b-configure-alert:
+              command: !Join
+                - ''
+                - - powershell.exe -Command "
+                  - 'c:\cfn\scripts\Configure-Fsrm.ps1 -SmtpServer EXCH1.'
+                  - !Ref DomainDNSName
+                  - ' -AdminEmailAddress '
+                  - !Ref DomainAdminUser
+                  - '@'
+                  - !Ref DomainDNSName
+                  - ' -VolumeSize '
+                  - !Ref FSVolumeSize
+                  - 'GB -QuotaPath c:\AWSShares"'
         installDFS:
           commands:
             a-install-dfs:
@@ -332,31 +291,30 @@ Resources:
                   - c:\cfn\scripts\Create-SharedFolders.ps1
                   - ' }"'
               waitAfterCompletion: '0'
-        configureFsrmAndDfs:
+        runCreateDfsScript:
           DependsOn: FS2WaitCondition
           commands:
-            a-enable-autologon:
-              command: !Join 
+            a-run-dfs-script:
+              command: !Join
                 - ''
-                - - 'powershell.exe -Command c:\cfn\scripts\Enable-AutoLogon.ps1'
-                  - ' -UserName '
+                - - powershell.exe -Command "
+                  - 'Invoke-Command -Session (New-PSSession -Credential '
+                  - (New-Object System.Management.Automation.PSCredential('
                   - !Ref DomainNetBIOSName
                   - \
                   - !Ref DomainAdminUser
-                  - ' -Password '
+                  - ''','
+                  - '(ConvertTo-SecureString '
+                  - ''''
                   - !Ref DomainAdminPassword
-                  - ' -StartupScript c:\cfn\scripts\ConfigureFsrmAndDfs.bat'
-              waitAfterCompletion: '0'
-            b-reboot:
-              command: powershell.exe -command Restart-Computer -Force
-              waitAfterCompletion: forever
-            c-wait:
-              command: powershell.exe -command Start-Sleep -Seconds 900
-              waitAfterCompletion: '0'
-            d-disable-autologon:
-              command: !Join
-                - ''
-                - - 'powershell.exe -Command c:\cfn\scripts\Disable-AutoLogon.ps1'
+                  - ''''
+                  - ' -AsPlainText -Force)))) -Script { c:\cfn\scripts\Configure-Dfs.ps1 -DomainName '
+                  - !Ref DomainDNSName
+                  - ' -Fs1NetBiosName '
+                  - !Ref FS1NetBIOSName
+                  - ' -Fs2NetBiosName '
+                  - !Ref FS2NetBIOSName
+                  - ' }"'
               waitAfterCompletion: '0'
         finalize:
           commands:
@@ -404,10 +362,9 @@ Resources:
             - initializeDisk
             - rename
             - join
-            - installFSRM
+            - configureFSRM
             - installDFS
             - createSharedFolders
-            - configureFsrm
             - finalize
         setup:
           files:
@@ -456,36 +413,7 @@ Resources:
                     $netip.DNSServer.ServerAddresses;
                   - ''
             'c:\cfn\scripts\Configure-Fsrm.ps1':
-              content: !Join
-                - ''
-                - - $SmtpServer="EXCH1.
-                  - !Ref DomainDNSName
-                  - '"; '
-                  - $AdminEmailAddress="
-                  - !Ref DomainAdminUser
-                  - '@'
-                  - !Ref DomainDNSName
-                  - '"; '
-                  - $VolumeSize="
-                  - !Ref FSVolumeSize
-                  - 'GB"; '
-                  - $QuotaPath="c:\AWSShares"
-                  - '; '
-                  - 'Set-FsrmSetting -SmtpServer $SmtpServer -AdminEmailAddress $AdminEmailAddress; '
-                  - '$Action = New-FsrmAction -Type Email -MailTo $AdminEmailAddress -RunLimitInterval 120 '
-                  - '-Subject "Warning: Running Out of Disk Space on FS1!" '
-                  - '-Body "You are about to reach the end of your available storage on FS1. You can add more storage or delete old, unused files." '
-                  - '-Confirm:$false; '
-                  - '$Threshold = New-FsrmQuotaThreshold -Percentage 90 -Action $Action -Confirm:$false; '
-                  - 'New-FSRMQuota -Path $QuotaPath -Size ($VolumeSize/1) -Threshold $Threshold '
-                  - '-Description "This quota monitors the shared SBIT volume and warns when the volume has only 10% free space." '
-                  - '-Confirm:$false'
-            'c:\cfn\scripts\ConfigureFsrm.bat':
-              source: 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/ConfigureFsrm.bat'
-            'c:\cfn\scripts\Enable-AutoLogon.ps1':
-              source: 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/Enable-AutoLogon.ps1'
-            'c:\cfn\scripts\Disable-AutoLogon.ps1':
-              source: 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/Disable-AutoLogon.ps1'
+              source: 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/Configure-Fsrm.ps1'
             'c:\cfn\scripts\Create-SharedFolders.ps1':
               source: 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/Create-SharedFolders.ps1'
             'c:\cfn\scripts\Format-AWSDisk.ps1':
@@ -551,13 +479,25 @@ Resources:
                   - ''''
                   - ' -AsPlainText -Force))) -Restart'
               waitAfterCompletion: forever
-        installFSRM:
+        configureFSRM:
           commands:
             a-install-fsrm:
               command: !Join
                 - ''
                 - - powershell.exe -Command "Install-WindowsFeature FS-Resource-Manager -IncludeManagementTools"
-              waitAfterCompletion: '0'
+            b-configure-alert:
+              command: !Join
+                - ''
+                - - powershell.exe -Command "
+                  - 'c:\cfn\scripts\Configure-Fsrm.ps1 -SmtpServer EXCH1.'
+                  - !Ref DomainDNSName
+                  - ' -AdminEmailAddress '
+                  - !Ref DomainAdminUser
+                  - '@'
+                  - !Ref DomainDNSName
+                  - ' -VolumeSize '
+                  - !Ref FSVolumeSize
+                  - 'GB -QuotaPath c:\AWSShares"'
         installDFS:
           commands:
             a-install-dfs:
@@ -598,32 +538,6 @@ Resources:
                   - c:\cfn\scripts\Create-SharedFolders.ps1
                   - ' }"'
               waitAfterCompletion: '0'
-        configureFsrm:
-          commands:
-            a-enable-autologon:
-              command: !Join 
-                - ''
-                - - 'powershell.exe -Command c:\cfn\scripts\Enable-AutoLogon.ps1'
-                  - ' -UserName '
-                  - !Ref DomainNetBIOSName
-                  - \
-                  - !Ref DomainAdminUser
-                  - ' -Password '
-                  - !Ref DomainAdminPassword
-                  - ' -StartupScript c:\cfn\scripts\ConfigureFsrm.bat'
-              waitAfterCompletion: '0'
-            b-reboot:
-              command: powershell.exe -command Restart-Computer -Force
-              waitAfterCompletion: forever
-            c-wait:
-              command: powershell.exe -command Start-Sleep -Seconds 120
-              waitAfterCompletion: '0'
-            d-disable-autologon:
-              command: !Join
-                - ''
-                - - 'powershell.exe -Command c:\cfn\scripts\Disable-AutoLogon.ps1'
-              waitAfterCompletion: '0'
-          
         finalize:
           commands:
             a-signal-success:
