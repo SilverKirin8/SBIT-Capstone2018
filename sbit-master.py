@@ -29,8 +29,8 @@ DON'T FORGET TO UPDATE CLOUDFORMATION TEMPLATE LOCATIONS
 '''
 vpcTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/2018022aO1-NetworkStackForCapstone.yaml7ruxj7sxky9'
 adTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/2018029g87-ADStackForCapstone.yaml003x5k82ixi5v'
-fsTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/20180483y4-FSStackForCapstone.yamlusf96fiw3se'
-exchTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/2018048HWO-ExchangeStackForCapstone.yamlfrs9scnug1q'
+fsTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/2018048HdH-FSStackForCapstone.yamltiebtuv7wt'
+exchTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/2018049xMu-ExchangeStackForCapstone.yamlbmsogkie6gg'
 
 #EC2 object allows connection and manipulation of AWS EC2 resource types
 ec2 = boto3.resource('ec2')
@@ -52,6 +52,7 @@ def main():
     userNumDcs = getNumDcs('How many Domain Controllers? [Leave blank to use default of 2]: ')
     userNumFileServers = getNumFileServers('How many File Servers? [Leave blank to use default of 2]: ')
     userVolumeSize = getVolumeSize('How much storage would you like (in GiBs) on file servers?: ')
+    userExchVolumeSize = getVolumeSize('How much storage would you like (in GiBs) on the Exchange server?: ') #Not Validated, Lowest possible size=32GB (Leaves ~31MB free space)
     userDcInstanceType = getInstanceType('Enter the instance type to use for Domain Controllers [Default: t2.micro]: ')
     userFsInstanceType = getInstanceType('Enter the instance type to use for File Servers [Default: t2.micro]: ')
     userExchangeInstanceType = getInstanceType('Enter the instance type to use for Exchange servers [Default: t2.micro]: ')
@@ -102,7 +103,7 @@ def buildADStack(networkStackName, userDomainName, userDomainNetBIOSName, userDo
 	#Print estimated time to completion
 	print('\n' + SECTION_SEPARATOR)
 	print('Building Active Directory...')
-	print('Estimated time to completion: ~30 min.')
+	print('Estimated time to completion: ~25-30 min.')
 	
 	adStackResponse = cloudFormationClient.create_stack(
 		StackName = adStackName,
@@ -153,7 +154,7 @@ def buildFSStack(networkStackName, adStackName, userDomainName, userDomainNetBIO
     #Print estimated time to completion
     print('\n' + SECTION_SEPARATOR)
     print('Building File Servers...')
-    print('Estimated time to completion: ~10 min.')
+    print('Estimated time to completion: ~10-15 min.')
     
     fsStackResponse = cloudFormationClient.create_stack(
         StackName = fsStackName,
@@ -198,11 +199,11 @@ def buildFSStack(networkStackName, adStackName, userDomainName, userDomainNetBIO
         ],
 		OnFailure='DO_NOTHING'
     )
-    fsStackWaiter.wait(StackName=fsStackResponse['StackId'])
+    #fsStackWaiter.wait(StackName=fsStackResponse['StackId'])
     
     print('File Servers... Build Complete!')
 
-def buildExchStack(networkStackName, adStackName, userDomainName, userDomainNetBIOSName, userDomainAdminUsername, userDomainAdminPassword, userExchangeInstanceType, userKeyPair):
+def buildExchStack(networkStackName, adStackName, userDomainName, userDomainNetBIOSName, userDomainAdminUsername, userDomainAdminPassword, userExchangeInstanceType, userExchVolumeSize, userKeyPair):
     #exchStackWaiter can be called to halt script execution until the specified stack is finished building
     exchStackWaiter = cloudFormationClient.get_waiter('stack_create_complete')
     
@@ -244,12 +245,17 @@ def buildExchStack(networkStackName, adStackName, userDomainName, userDomainNetB
                 'ParameterValue' : userExchangeInstanceType
             },
             {
+                'ParameterKey' : 'ExchDriveSize',
+                'ParameterValue' : userExchVolumeSize
+            },
+            {
                 'ParameterKey' : 'KeyPair',
                 'ParameterValue' : userKeyPair
             },
         ],
+		OnFailure='DO_NOTHING'
     )
-    exchStackWaiter.wait(StackName=exchStackResponse['StackId'])
+    #exchStackWaiter.wait(StackName=exchStackResponse['StackId'])
     
     print('Exchange Server... Build Complete!')
 

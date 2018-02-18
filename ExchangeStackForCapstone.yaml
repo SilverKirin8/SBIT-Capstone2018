@@ -78,7 +78,7 @@ Parameters:
   ExchDriveSize:
     Type: String
     Description: 'The size of the root volume for the Exchange Server.'
-    Default: '45'
+    Default: '33'
 Resources:
   EXCH1:
     Type: 'AWS::EC2::Instance'
@@ -161,7 +161,6 @@ Resources:
                   - !Ref DomainAdminPassword
                   - ''''
                   - ' -AsPlainText -Force)))'
-              waitAfterCompletion: '0'
             'c:\cfn\scripts\Prepare-ActiveDirectory.ps1':
               content: !Join
                 - ''
@@ -311,13 +310,20 @@ Resources:
               command: powershell.exe -command Restart-Computer -Force
               waitAfterCompletion: forever
             f-wait:
-              command: powershell.exe -command Start-Sleep -Seconds 3600
+              command: powershell.exe -command Start-Sleep -Seconds 3900
               waitAfterCompletion: '0'
             g-disable-autologon:
               command: !Join
                 - ''
                 - - 'powershell.exe -Command c:\cfn\scripts\Disable-AutoLogon.ps1'
-            h-signal-success:
+              waitAfterCompletion: '0'
+            h-reboot:
+              command: powershell.exe -Command Restart-Computer -Force
+              waitAfterCompletion: forever
+            i-remove-install-media:
+              command: powershell.exe -Command "Remove-Item -Path c:\cfn\downloads -Recurse -Force"
+              waitAfterCompletion: '0'
+            j-signal-success:
               command: !Join
                 - ''
                 - - cfn-signal.exe -e 0 "
@@ -404,6 +410,11 @@ Resources:
               - |+
               - |
                 </script>
+      BlockDeviceMappings:
+        - DeviceName: "/dev/sda1"
+          Ebs:
+            VolumeType: "gp2"
+            VolumeSize: !Ref ExchDriveSize
   ExchWaitCondition:
     Type: 'AWS::CloudFormation::WaitCondition'
     DependsOn: EXCH1

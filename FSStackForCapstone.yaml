@@ -167,7 +167,7 @@ Resources:
             'c:\cfn\scripts\Configure-Fsrm.ps1':
               content: !Join
                 - ''
-                - - (Get-Date).ToString() >> c:\cfn\log\fsStatus.txt; $SmtpServer="EXCH1.
+                - - $SmtpServer="EXCH1.
                   - !Ref DomainDNSName
                   - '"; '
                   - $AdminEmailAddress="
@@ -188,11 +188,11 @@ Resources:
                   - '$Threshold = New-FsrmQuotaThreshold -Percentage 90 -Action $Action -Confirm:$false; '
                   - 'New-FSRMQuota -Path $QuotaPath -Size ($VolumeSize/1) -Threshold $Threshold '
                   - '-Description "This quota monitors the shared SBIT volume and warns when the volume has only 10% free space." '
-                  - '-Confirm:$false; (Get-Date).ToString() >> c:\cfn\log\fsStatus.txt'
+                  - '-Confirm:$false'
             'c:\cfn\scripts\Configure-Dfs.ps1':
               content: !Join
                 - ''
-                - - (Get-Date).ToString() >> c:\cfn\log\fsStatus.txt; $DomainName="
+                - - $DomainName="
                   - !Ref DomainDNSName
                   - '"; '
                   - $Fs1NetBiosName="
@@ -208,13 +208,14 @@ Resources:
                   - 'New-DfsnRootTarget -Path "\\$DomainName\AWSShares" -TargetPath "\\$Fs2NetBiosName.$DomainName\AWSShares"; '
                   - 'New-DfsReplicationGroup -DomainName $DomainName -GroupName $rGroupName | '
                   - 'New-DfsReplicatedFolder -FolderName $rFolderName -DomainName $DomainName | '
-                  - 'Add-DfsrMember -DomainName $DomainName -ComputerName "$Fs1NetBiosName.$DomainName","$Fs2NetBiosName.$DomainName"; '
+                  - 'Add-DfsrMember -DomainName $DomainName -ComputerName "$Fs1NetBiosName.$DomainName"; '
+                  - 'Add-DfsrMember -GroupName $rGroupName -DomainName $DomainName -ComputerName "$Fs2NetBiosName.$DomainName"; '
                   - 'Add-DfsrConnection -DomainName $DomainName -GroupName $rGroupName '
                   - '-SourceComputerName "$Fs1NetBiosName.$DomainName" -DestinationComputerName "$Fs2NetBiosName.$DomainName"; '
                   - 'Set-DfsrMembership -GroupName $rGroupName -FolderName $rFolderName -ComputerName "$Fs1NetBiosName.$DomainName" '
-                  - '-ContentPath $SharedFolderPath –PrimaryMember $true; '
+                  - '-ContentPath "c:\AWSShares" -PrimaryMember $true -Force; '
                   - 'Set-DfsrMembership -GroupName $rGroupName -FolderName $rFolderName -ComputerName "$Fs2NetBiosName.$DomainName" '
-                  - '-ContentPath $SharedFolderPath; (Get-Date).ToString() >> c:\cfn\log\fsStatus.txt'
+                  - '-ContentPath "c:\AWSShares" -Force'
             'c:\cfn\scripts\ConfigureFsrmAndDfs.bat':
               source: 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/ConfigureFsrmAndDfs.bat'
             'c:\cfn\scripts\Enable-AutoLogon.ps1':
@@ -351,7 +352,7 @@ Resources:
               command: powershell.exe -command Restart-Computer -Force
               waitAfterCompletion: forever
             c-wait:
-              command: powershell.exe -command Start-Sleep -Seconds 900
+              command: powershell.exe -command Start-Sleep -Seconds 60
               waitAfterCompletion: '0'
             d-disable-autologon:
               command: !Join
@@ -616,7 +617,7 @@ Resources:
               command: powershell.exe -command Restart-Computer -Force
               waitAfterCompletion: forever
             c-wait:
-              command: powershell.exe -command Start-Sleep -Seconds 120
+              command: powershell.exe -command Start-Sleep -Seconds 15
               waitAfterCompletion: '0'
             d-disable-autologon:
               command: !Join
