@@ -28,9 +28,9 @@ DON'T FORGET TO UPDATE CLOUDFORMATION TEMPLATE LOCATIONS
 (Either replace references to or instantiate following vars)
 '''
 vpcTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/2018022aO1-NetworkStackForCapstone.yaml7ruxj7sxky9'
-adTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/2018029g87-ADStackForCapstone.yaml003x5k82ixi5v'
+adTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/2018050S6O-ADStackForCapstone.yamlcajojii66ar'
 fsTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/2018048HdH-FSStackForCapstone.yamltiebtuv7wt'
-exchTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/2018049xMu-ExchangeStackForCapstone.yamlbmsogkie6gg'
+exchTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/2018050dXT-ExchangeStackForCapstone.yamlzs72nnotpr'
 
 #EC2 object allows connection and manipulation of AWS EC2 resource types
 ec2 = boto3.resource('ec2')
@@ -55,7 +55,7 @@ def main():
     userExchVolumeSize = getVolumeSize('How much storage would you like (in GiBs) on the Exchange server?: ') #Not Validated, Lowest possible size=32GB (Leaves ~31MB free space)
     userDcInstanceType = getInstanceType('Enter the instance type to use for Domain Controllers [Default: t2.micro]: ')
     userFsInstanceType = getInstanceType('Enter the instance type to use for File Servers [Default: t2.micro]: ')
-    userExchangeInstanceType = getInstanceType('Enter the instance type to use for Exchange servers [Default: t2.micro]: ')
+    userExchangeInstanceType = getInstanceType('Enter the instance type to use for Exchange servers [Default: r4.large]: ')
     userDomainAdminUsername = getUsername('Enter a username for the domain administrator account (separate account from the default "Administrator" account): ')
     userDomainAdminPassword = getPassword('Enter a password for the domain administrator account: ')
     userRestoreModePassword = getPassword('Enter a password for Active Directory Restore Mode: ')
@@ -70,7 +70,7 @@ def main():
     #buildFSStack(networkStackName, adStackName, userDomainName, userDomainNetBIOSName, userDomainAdminUsername, userDomainAdminPassword, userFsInstanceType, userVolumeSize, userKeyPair)
     
     #Build Exchange server and configure mailboxes
-    buildExchStack(networkStackName, adStackName, userDomainName, userDomainNetBIOSName, userDomainAdminUsername, userDomainAdminPassword, userExchangeInstanceType, userKeyPair)
+    buildExchStack(networkStackName, adStackName, userDomainName, userDomainNetBIOSName, userDomainAdminUsername, userDomainAdminPassword, userExchangeInstanceType, userExchVolumeSize, userKeyPair)
 
     #Announce script completion
     print(SECTION_SEPARATOR)
@@ -142,6 +142,7 @@ def buildADStack(networkStackName, userDomainName, userDomainNetBIOSName, userDo
 				'ParameterValue' : userKeyPair
 			},
 		],
+		OnFailure='DO_NOTHING'
 	)
 	adStackWaiter.wait(StackName=adStackResponse['StackId'])
 	print('Active Directory... Build Complete!')
@@ -365,7 +366,7 @@ def getVolumeSize(message):
 
 #Prompt for and validate the instance type for instances
 def getInstanceType(message):
-    validTypes = ["t2.micro","t2.small","t2.medium","t2.large","t2.xlarge","t2.2xlarge","m5.large","m5.xlarge","m5.2xlarge","m5.4xlarge"]
+    validTypes = ["t2.micro","t2.small","t2.medium","t2.large","t2.xlarge","t2.2xlarge","m5.large","m5.xlarge","m5.2xlarge","m5.4xlarge","r4.large"]
     validType = False
     #Loop until a valid instance type is entered
     while(not validType):

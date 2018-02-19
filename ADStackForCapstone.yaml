@@ -174,6 +174,26 @@ Resources:
                     Get-NetAdapter | Set-DnsClientServerAddress -ServerAddresses
                     $netip.DNSServer.ServerAddresses;
                   - ''
+            'c:\cfn\scripts\Create-AdminUser.ps1':
+              content: !Join
+                - ''
+                - - $domainName="
+                  - !Ref DomainDNSName
+                  - '"; $DomainLdapPath=$domainName -replace "\.",",DC="; '
+                  - $DomainLdapPath="DC=" + $DomainLdapPath;
+                  - ' New-ADOrganizationalUnit -Name "AWS OU" -Path $DomainLdapPath;'
+                  - ' New-ADUser -Name '
+                  - !Ref DomainAdminUser
+                  - ' -UserPrincipalName '
+                  - !Ref DomainAdminUser
+                  - '@'
+                  - !Ref DomainDNSName
+                  - ' -Path "OU=AWS OU,$DomainLdapPath"'
+                  - ' -AccountPassword (ConvertTo-SecureString '
+                  - ''''
+                  - !Ref DomainAdminPassword
+                  - ''''
+                  - ' -AsPlainText -Force) -Enabled $true -PasswordNeverExpires $true'
             'c:\cfn\scripts\ConvertTo-EnterpriseAdmin.ps1':
               source: 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/ConvertTo-EnterpriseAdmin.ps1'
             'c:\cfn\scripts\Create-AWSGroups.ps1':
@@ -240,15 +260,7 @@ Resources:
             d-create-new-user:
               command: !Join
                 - ''
-                - - 'powershell.exe -Command "New-ADUser -Name '
-                  - !Ref DomainAdminUser
-                  - ' -UserPrincipalName '
-                  - !Ref DomainAdminUser
-                  - ' -AccountPassword (ConvertTo-SecureString '
-                  - ''''
-                  - !Ref DomainAdminPassword
-                  - ''''
-                  - ' -AsPlainText -Force) -Enabled $true -PasswordNeverExpires $true"'
+                - - powershell.exe -Command "c:\cfn\scripts\Create-AdminUser.ps1"
               waitAfterCompletion: '0'
             e-make-user-domain-admin:
               command: !Join

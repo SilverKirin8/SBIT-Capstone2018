@@ -12,9 +12,6 @@
 $DomainName = $DomainDNSName -replace '\.',',DC='
 $DomainName = 'DC=' + $DomainName
 
-# Create a new OU to house the groups
-New-ADOrganizationalUnit -Name $OrganizationalUnit -Path $DomainName
-
 # Create global groups to hold user accounts
 New-ADGroup -Name 'Admins' -SamAccountName 'Admins' -GroupCategory Security -GroupScope Global -DisplayName 'Admins' -Path "OU=$OrganizationalUnit,$DomainName"
 Add-ADGroupMember -Identity 'Admins' -Members 'Domain Admins','Administrator'

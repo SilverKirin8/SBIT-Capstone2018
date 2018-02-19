@@ -44,7 +44,6 @@ Parameters:
     Type: String
     Description: 'The instance type for the Exchange server. Default: t2.large'
     AllowedValues:
-      - t2.micro
       - t2.large
       - t2.xlarge
       - t2.2xlarge
@@ -52,7 +51,8 @@ Parameters:
       - m5.xlarge
       - m5.2xlarge
       - m5.4xlarge
-    Default: t2.large
+      - r4.large
+    Default: r4.large
   ExchImage:
     Type: String
     Description: 'The AMI ID to be used when creating the Exchange server.'
@@ -175,6 +175,44 @@ Resources:
                   - '$exchDriveLetter = Get-Content c:\cfn\driveletter.txt; '
                   - Invoke-Expression "$exchDriveLetter\Setup.exe /mode:Install /role:Mailbox /MdbName:DB1 /DbFilePath:'C:\Databases\DB1\DB1.edb' /LogFolderPath:'C:\Databases\DB1' /InstallWindowsComponents /IAcceptExchangeServerLicenseTerms"
                   - '}'
+            'c:\cfn\scripts\Create-Mailboxes.ps1':
+              content: !Join
+                - ''
+                - - Invoke-Command -Script {
+                  - '$session = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri http://'
+                  - !Ref ExchNetBIOSName
+                  - '.'
+                  - !Ref DomainDNSName
+                  - '/Powershell/ -Authentication Kerberos -Credential '
+                  - (New-Object System.Management.Automation.PSCredential('
+                  - !Ref DomainNetBIOSName
+                  - \
+                  - !Ref DomainAdminUser
+                  - ''','
+                  - '(ConvertTo-SecureString '
+                  - ''''
+                  - !Ref DomainAdminPassword
+                  - ''''
+                  - ' -AsPlainText -Force))); '
+                  - 'Import-PSSession $session; '
+                  - Get-User -OrganizationalUnit 'AWS OU' | Enable-Mailbox -Database 'DB1'
+                  - '} -ComputerName '
+                  - !Ref ExchNetBIOSName
+                  - ' -Credential '
+                  - (New-Object System.Management.Automation.PSCredential('
+                  - !Ref DomainNetBIOSName
+                  - \
+                  - !Ref DomainAdminUser
+                  - ''','
+                  - '(ConvertTo-SecureString '
+                  - ''''
+                  - !Ref DomainAdminPassword
+                  - ''''
+                  - ' -AsPlainText -Force)))'
+            'c:\cfn\scripts\Create-Mailboxes.bat':
+              content: !Join
+                - ''
+                - - powershell.exe -Command Start-Process powershell.exe '-NoProfile -Command "c:\cfn\scripts\Create-Mailboxes.ps1"' -Verb RunAs
             'c:\cfn\scripts\ExchangeInstall.bat':
               source: >-
                 https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/ExchangeInstall.bat
@@ -310,7 +348,7 @@ Resources:
               command: powershell.exe -command Restart-Computer -Force
               waitAfterCompletion: forever
             f-wait:
-              command: powershell.exe -command Start-Sleep -Seconds 3900
+              command: powershell.exe -command Start-Sleep -Seconds 4020
               waitAfterCompletion: '0'
             g-disable-autologon:
               command: !Join
@@ -332,42 +370,30 @@ Resources:
               waitAfterCompletion: '0'
         createMailboxes:
           commands:
-            a-create-mailboxes:
+            a-enable-autologon:
+              command: !Join 
+                - ''
+                - - 'powershell.exe -Command c:\cfn\scripts\Enable-AutoLogon.ps1'
+                  - ' -UserName '
+                  - !Ref DomainNetBIOSName
+                  - \
+                  - !Ref DomainAdminUser
+                  - ' -Password '
+                  - !Ref DomainAdminPassword
+                  - ' -StartupScript c:\cfn\scripts\Create-Mailboxes.bat'
+              waitAfterCompletion: '0'
+            b-reboot:
+              command: powershell.exe -command Restart-Computer -Force
+              waitAfterCompletion: forever
+            c-wait:
+              command: powershell.exe -command Start-Sleep -Seconds 30
+              waitAfterCompletion: '0'
+            d-disable-autologon:
               command: !Join
                 - ''
-                - - powershell.exe -Command "Invoke-Command -Script {
-                  - '$session = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri http://'
-                  - !Ref ExchNetBIOSName
-                  - '.'
-                  - !Ref DomainDNSName
-                  - '/Powershell/ -Authentication Kerberos -Credential '
-                  - (New-Object System.Management.Automation.PSCredential('
-                  - !Ref DomainNetBIOSName
-                  - \
-                  - !Ref DomainAdminUser
-                  - ''','
-                  - '(ConvertTo-SecureString '
-                  - ''''
-                  - !Ref DomainAdminPassword
-                  - ''''
-                  - ' -AsPlainText -Force))); '
-                  - 'Import-PSSession $session; '
-                  - Get-User -OrganizationalUnit 'Users' | Enable-Mailbox -Database 'DB1'
-                  - '} -ComputerName '
-                  - !Ref ExchNetBIOSName
-                  - ' -Credential '
-                  - (New-Object System.Management.Automation.PSCredential('
-                  - !Ref DomainNetBIOSName
-                  - \
-                  - !Ref DomainAdminUser
-                  - ''','
-                  - '(ConvertTo-SecureString '
-                  - ''''
-                  - !Ref DomainAdminPassword
-                  - ''''
-                  - ' -AsPlainText -Force)))"'
+                - - 'powershell.exe -Command c:\cfn\scripts\Disable-AutoLogon.ps1'
               waitAfterCompletion: '0'
-            b-signal-success:
+            e-signal-success:
               command: !Join
                 - ''
                 - - cfn-signal.exe -e 0 "
@@ -376,7 +402,10 @@ Resources:
               waitAfterCompletion: '0'
         finalize:
           commands:
-            a-signal-success:
+            a-reboot:
+              command: powershell.exe -command Restart-Computer -Force
+              waitAfterCompletion: forever
+            b-signal-success:
               command: !Join
                 - ''
                 - - cfn-signal.exe -e 0 "
@@ -420,7 +449,7 @@ Resources:
     DependsOn: EXCH1
     Properties:
       Handle: !Ref ExchWaitHandle
-      Timeout: '14400'
+      Timeout: '7200'
   ExchWaitHandle:
     Type: 'AWS::CloudFormation::WaitConditionHandle'
   JoinWaitCondition:
@@ -444,7 +473,7 @@ Resources:
     DependsOn: EXCH1
     Properties:
       Handle: !Ref PrepAndInstallWaitHandle
-      Timeout: '14400'
+      Timeout: '7200'
   PrepAndInstallWaitHandle:
     Type: 'AWS::CloudFormation::WaitConditionHandle'
   MailboxWaitCondition:
@@ -452,7 +481,7 @@ Resources:
     DependsOn: EXCH1
     Properties:
       Handle: !Ref MailboxWaitHandle
-      Timeout: '14400'
+      Timeout: '7200'
   MailboxWaitHandle:
     Type: 'AWS::CloudFormation::WaitConditionHandle'
   ExchSecurityGroup:
