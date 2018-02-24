@@ -67,7 +67,7 @@ def main():
     buildADStack(networkStackName, userDomainName, userDomainNetBIOSName, userDomainAdminUsername, userDomainAdminPassword, userRestoreModePassword, userDcInstanceType, userKeyPair)
 	
 	#Build File Servers and configure a Namespace and Replication
-    #buildFSStack(networkStackName, adStackName, userDomainName, userDomainNetBIOSName, userDomainAdminUsername, userDomainAdminPassword, userFsInstanceType, userVolumeSize, userKeyPair)
+    buildFSStack(networkStackName, adStackName, userDomainName, userDomainNetBIOSName, userDomainAdminUsername, userDomainAdminPassword, userFsInstanceType, userVolumeSize, userKeyPair)
     
     #Build Exchange server and configure mailboxes
     buildExchStack(networkStackName, adStackName, userDomainName, userDomainNetBIOSName, userDomainAdminUsername, userDomainAdminPassword, userExchangeInstanceType, userExchVolumeSize, userKeyPair)
