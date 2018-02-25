@@ -6,12 +6,6 @@ Description: >
   Availability Zones), a NetworkACL for each Subnet, Route Tables for each
   subnet, an Internet Gateway for the  public Subnet(s), and a NAT Gateway for
   the private Subnets.
-
-  -To Do-     (at some point...) Three Route Tables - One for each subnet NAT
-  Gateway
-
-  => May add second public subnet at later date => Security Groups will be made
-  with each instance
 Parameters:
   VpcCidrBlock:
     Type: String
@@ -45,6 +39,17 @@ Parameters:
     Type: String
     Default: us-east-2b
     Description: 'Secondary Availability Zone in the VPC.'
+  CustPubIp:
+    Type: String
+    Description: 'Static, publicly-routable IP of the on-premises FW'
+    AllowedPattern: >-
+      ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$
+  OnPremPrivSub:
+    Type: String
+    Description: 'The private subnet used in the On-Premise network'
+    Default: 10.0.52.0/24
+    AllowedPattern: >-
+      ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])/(1[6-9]|2[0-9]|30)$
 Resources:
   Vpc:
     Type: 'AWS::EC2::VPC'
@@ -166,6 +171,53 @@ Resources:
       DestinationCidrBlock: 0.0.0.0/0
       NatGatewayId: !Ref NatGW
       RouteTableId: !Ref PrivSub2RouteTable
+  VPNCustomerGW:
+    Type: 'AWS::EC2::CustomerGateway'
+    Properties:
+      BgpAsn: 65000
+      IpAddress: !Ref CustPubIp
+      Tags:
+        - Key: 'Name'
+          Value: 'SBIT Customer Gatway'
+      Type: ipsec.1
+  VPNGW:
+    Type: 'AWS::EC2::VPNGateway'
+    Properties: 
+      Type: ipsec.1
+      Tags:
+        - Key: 'Name'
+          Value: 'SBIT VPN Gateway'
+  AttachVPNGWtoVPC:
+    Type: "AWS::EC2::VPCGatewayAttachment"
+    Properties: 
+      VpcId: !Ref Vpc
+      VpnGatewayId: !Ref VPNGW
+  VPNConnection:
+    Type: "AWS::EC2::VPNConnection"
+    Properties: 
+      Type: ipsec.1
+      CustomerGatewayId: !Ref VPNCustomerGW
+      StaticRoutesOnly: true
+      Tags:
+        - Key: 'Name'
+          Value: 'SBIT VPN Connection'
+      VpnGatewayId: !Ref VPNGW
+      VpnTunnelOptionsSpecifications: 
+        - TunnelInsideCidr: 169.254.8.0/30
+        - TunnelInsideCidr: 169.254.8.4/30
+  VPNConnectionRoute:
+    Type: "AWS::EC2::VPNConnectionRoute"
+    Properties: 
+      DestinationCidrBlock: !Ref OnPremPrivSub
+      VpnConnectionId: !Ref VPNConnection
+  VPNRoutePropagation:
+    Type: "AWS::EC2::VPNGatewayRoutePropagation"
+    Properties: 
+      RouteTableIds:
+        - !Ref PrivSub1RouteTable
+        - !Ref PrivSub2RouteTable
+        - !Ref PubSub1RouteTable
+      VpnGatewayId: !Ref VPNGW
 Outputs:
   VPCID:
     Description: 'The ID of the VPC object created in "Resources".'

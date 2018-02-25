@@ -12,7 +12,7 @@ SECTION_SEPARATOR = '#'*60
 '''
 Add prompts for these for presentation
     Video with other names
-	Live demo with defaults
+    Live demo with defaults
 '''
 networkStackName = 'CapstoneNetworkStack'
 adStackName = 'CapstoneADStack'
@@ -27,7 +27,7 @@ fs2NetBIOSName = 'FS2'
 DON'T FORGET TO UPDATE CLOUDFORMATION TEMPLATE LOCATIONS
 (Either replace references to or instantiate following vars)
 '''
-vpcTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/2018022aO1-NetworkStackForCapstone.yaml7ruxj7sxky9'
+vpcTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/2018056en9-NetworkStackForCapstone.yaml6o58xgwygdk'
 adTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/2018050S6O-ADStackForCapstone.yamlcajojii66ar'
 fsTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/2018048HdH-FSStackForCapstone.yamltiebtuv7wt'
 exchTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/2018050dXT-ExchangeStackForCapstone.yamlzs72nnotpr'
@@ -59,37 +59,61 @@ def main():
     userDomainAdminUsername = getUsername('Enter a username for the domain administrator account (separate account from the default "Administrator" account): ')
     userDomainAdminPassword = getPassword('Enter a password for the domain administrator account: ')
     userRestoreModePassword = getPassword('Enter a password for Active Directory Restore Mode: ')
+	userPublicIp = getIpAddress('Enter the public IP of the firewall: ')
 
     #Build VPC and other networking resources
-    buildNetworkStack()
+    buildNetworkStack(userPublicIp)
 
-	#Build Active Directory and Domain Controllers
+    #Build Active Directory and Domain Controllers
     buildADStack(networkStackName, userDomainName, userDomainNetBIOSName, userDomainAdminUsername, userDomainAdminPassword, userRestoreModePassword, userDcInstanceType, userKeyPair)
-	
-	#Build File Servers and configure a Namespace and Replication
-    buildFSStack(networkStackName, adStackName, userDomainName, userDomainNetBIOSName, userDomainAdminUsername, userDomainAdminPassword, userFsInstanceType, userVolumeSize, userKeyPair)
+    
+    #Build File Servers and configure a Namespace and Replication
+    #buildFSStack(networkStackName, adStackName, userDomainName, userDomainNetBIOSName, userDomainAdminUsername, userDomainAdminPassword, userFsInstanceType, userVolumeSize, userKeyPair)
     
     #Build Exchange server and configure mailboxes
-    buildExchStack(networkStackName, adStackName, userDomainName, userDomainNetBIOSName, userDomainAdminUsername, userDomainAdminPassword, userExchangeInstanceType, userExchVolumeSize, userKeyPair)
+    #buildExchStack(networkStackName, adStackName, userDomainName, userDomainNetBIOSName, userDomainAdminUsername, userDomainAdminPassword, userExchangeInstanceType, userExchVolumeSize, userKeyPair)
 
     #Announce script completion
     print(SECTION_SEPARATOR)
-    print('Build complete!!!\nEnjoy your new servers!\n(For more information, see the Documentation.)')
+    print('Build complete!!!\nEnjoy your new servers!\n(For more information and next steps, see the Documentation.)')
     print(SECTION_SEPARATOR)
 
 #Build VPC and other networking resources
-def buildNetworkStack():
+def buildNetworkStack(userPublicIp):
     #vpcStackWaiter can be called to halt script execution until the specified stack is finished executing/building
     vpcStackWaiter = cloudFormationClient.get_waiter('stack_create_complete')
     
     #Print estimated time to completion
     print('\n' + SECTION_SEPARATOR)
     print('Building AWS Networking...')
-    print('Estimated time to completion: ~2-5 min.')
+    print('Estimated time to completion: ~4-6 min.')
     
     vpcStackResponse = cloudFormationClient.create_stack(
         StackName = networkStackName,
         TemplateURL = vpcTemplateUrl,
+		Parameters=[
+            {
+                'ParameterKey' : 'VpcCidrBlock',
+                'ParameterValue' : '172.16.0.0/22'
+            },
+            {
+                'ParameterKey' : 'PrivSub1CidrBlock',
+                'ParameterValue' : '172.16.0.0/24'
+            },
+            {
+                'ParameterKey' : 'PrivSub2CidrBlock',
+                'ParameterValue' : '172.16.1.0/24'
+            },
+            {
+                'ParameterKey' : 'PubSub1CidrBlock',
+                'ParameterValue' : '172.16.2.0/24'
+            },
+	        {
+                'ParameterKey' : 'CustPubIp',
+                'ParameterValue' : userPublicIp
+            },
+        ],
+        OnFailure='DO_NOTHING'
     )
     vpcStackWaiter.wait(StackName=vpcStackResponse['StackId'])
 
@@ -97,55 +121,63 @@ def buildNetworkStack():
 
 #Build first two Domain Controllers in AD domain
 def buildADStack(networkStackName, userDomainName, userDomainNetBIOSName, userDomainAdminUsername, userDomainAdminPassword, userRestoreModePassword, userDcInstanceType, userKeyPair):
-	#adStackWaiter can be called to halt script execution until the specified stack is finished building
-	adStackWaiter = cloudFormationClient.get_waiter('stack_create_complete')
-	
-	#Print estimated time to completion
-	print('\n' + SECTION_SEPARATOR)
-	print('Building Active Directory...')
-	print('Estimated time to completion: ~25-30 min.')
-	
-	adStackResponse = cloudFormationClient.create_stack(
-		StackName = adStackName,
-		TemplateURL = adTemplateUrl,
-		Parameters=[
-			{
-				'ParameterKey' : 'NetworkStackName',
-				'ParameterValue' : networkStackName
-			},
-			{
-				'ParameterKey' : 'DomainDNSName',
-				'ParameterValue' : userDomainName
-			},
-			{
-				'ParameterKey' : 'DomainNetBIOSName',
-				'ParameterValue' : userDomainNetBIOSName
-			},
-			{
-				'ParameterKey' : 'DomainAdminUser',
-				'ParameterValue' : userDomainAdminUsername
-			},
-			{
-				'ParameterKey' : 'DomainAdminPassword',
-				'ParameterValue' : userDomainAdminPassword
-			},
-			{
-				'ParameterKey' : 'RestoreModePassword',
-				'ParameterValue' : userRestoreModePassword
-			},
-			{
-				'ParameterKey' : 'DCInstanceType',
-				'ParameterValue' : userDcInstanceType
-			},
-			{
-				'ParameterKey' : 'KeyPair',
-				'ParameterValue' : userKeyPair
-			},
-		],
-		OnFailure='DO_NOTHING'
-	)
-	adStackWaiter.wait(StackName=adStackResponse['StackId'])
-	print('Active Directory... Build Complete!')
+    #adStackWaiter can be called to halt script execution until the specified stack is finished building
+    adStackWaiter = cloudFormationClient.get_waiter('stack_create_complete')
+    
+    #Print estimated time to completion
+    print('\n' + SECTION_SEPARATOR)
+    print('Building Active Directory...')
+    print('Estimated time to completion: ~25-30 min.')
+    
+    adStackResponse = cloudFormationClient.create_stack(
+        StackName = adStackName,
+        TemplateURL = adTemplateUrl,
+        Parameters=[
+            {
+                'ParameterKey' : 'NetworkStackName',
+                'ParameterValue' : networkStackName
+            },
+            {
+                'ParameterKey' : 'DomainDNSName',
+                'ParameterValue' : userDomainName
+            },
+            {
+                'ParameterKey' : 'DomainNetBIOSName',
+                'ParameterValue' : userDomainNetBIOSName
+            },
+            {
+                'ParameterKey' : 'DomainAdminUser',
+                'ParameterValue' : userDomainAdminUsername
+            },
+            {
+                'ParameterKey' : 'DomainAdminPassword',
+                'ParameterValue' : userDomainAdminPassword
+            },
+            {
+                'ParameterKey' : 'RestoreModePassword',
+                'ParameterValue' : userRestoreModePassword
+            },
+            {
+                'ParameterKey' : 'DCInstanceType',
+                'ParameterValue' : userDcInstanceType
+            },
+            {
+                'ParameterKey' : 'KeyPair',
+                'ParameterValue' : userKeyPair
+            },
+            {
+                'ParameterKey' : 'DC1PrivIP',
+                'ParameterValue' : '172.16.0.10'
+            },
+            {
+                'ParameterKey' : 'DC2PrivIP',
+                'ParameterValue' : '172.16.1.10'
+            },
+        ],
+        OnFailure='DO_NOTHING'
+    )
+    adStackWaiter.wait(StackName=adStackResponse['StackId'])
+    print('Active Directory... Build Complete!')
 
 #Build first two File Servers in AD Domain
 def buildFSStack(networkStackName, adStackName, userDomainName, userDomainNetBIOSName, userDomainAdminUsername, userDomainAdminPassword, userFsInstanceType, userVolumeSize, userKeyPair):
@@ -197,8 +229,16 @@ def buildFSStack(networkStackName, adStackName, userDomainName, userDomainNetBIO
                 'ParameterKey' : 'KeyPair',
                 'ParameterValue' : userKeyPair
             },
+            {
+                'ParameterKey' : 'FS1PrivIP',
+                'ParameterValue' : '172.16.0.20'
+            },
+            {
+                'ParameterKey' : 'FS2PrivIP',
+                'ParameterValue' : '172.16.1.20'
+            },
         ],
-		OnFailure='DO_NOTHING'
+        OnFailure='DO_NOTHING'
     )
     #fsStackWaiter.wait(StackName=fsStackResponse['StackId'])
     
@@ -253,8 +293,12 @@ def buildExchStack(networkStackName, adStackName, userDomainName, userDomainNetB
                 'ParameterKey' : 'KeyPair',
                 'ParameterValue' : userKeyPair
             },
+            {
+                'ParameterKey' : 'ExchPrivIP',
+                'ParameterValue' : '172.16.0.30'
+            },
         ],
-		OnFailure='DO_NOTHING'
+        OnFailure='DO_NOTHING'
     )
     #exchStackWaiter.wait(StackName=exchStackResponse['StackId'])
     
@@ -276,7 +320,7 @@ def getDomainName(message):
         else:
             print('Invalid domain. Please enter a valid domain. Domain names must contain only upper and lowercase letters and numbers. Hyphens or dashes (-) are allowed only if they are NOT the first or last character.')
     return userDomain
-	
+    
 #Prompt for the NetBIOS name of the domain
 def getNetBiosName(message):
     validNetBiosName = False
@@ -379,7 +423,7 @@ def getInstanceType(message):
                 print('%s, ' % (instanceType), end='')
             print(validTypes[-1])
     return userInstanceType
-	
+    
 #Prompt for usernames for AD users
 def getUsername(message):
     validUsername = False
@@ -414,6 +458,19 @@ def getPassword(message):
             print('Invalid password. Password should be 8 characters or more and contain an uppercase letter, lowercase letter, number, and symbol.')
     return userPassword
 
+def getIpAddress(message)
+    validIp = False
+	#Loop until user enters a valid IP address
+	#Does not validate for public vs. private IPs!!!
+	while(not validIp):
+	    userIp = input(message)
+		#Ensure the IP is in the correct format
+		regex = re.compile('^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$')
+		if(regex.match(userIp)):
+		    validIp = True
+		else:
+		    print('Invalid IP. IPs must be in decimal-dot format. (Ex. 192.168.0.0)')
+	return userIp
 
 
 if __name__ == "__main__":
