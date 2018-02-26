@@ -102,6 +102,10 @@ Parameters:
     Default: FS2
     MaxLength: '15'
     MinLength: '1'
+  OnPremSubnet:
+    Type: String
+    Description: This is the subnet used by the On-Premise network.
+    Default: 10.0.52.0/24
 Resources:
   FS1:
     Type: 'AWS::EC2::Instance'
@@ -550,7 +554,7 @@ Resources:
                   - ''''
                   - !Ref DomainAdminPassword
                   - ''''
-                  - ' -AsPlainText -Force))) -Restart'
+                  - ' -AsPlainText -Force))) -Restart"'
               waitAfterCompletion: forever
         installFSRM:
           commands:
@@ -704,6 +708,10 @@ Resources:
           SourceSecurityGroupId:
             Fn::ImportValue:
               !Sub '${ADStackName}-DomainMemberSG'
+        - IpProtocol: -1
+          FromPort: -1
+          ToPort: -1
+          CidrIp: !Ref OnPremSubnet
   FS2SecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
@@ -731,3 +739,7 @@ Resources:
           SourceSecurityGroupId:
             Fn::ImportValue:
               !Sub '${ADStackName}-DomainMemberSG'
+        - IpProtocol: -1
+          FromPort: -1
+          ToPort: -1
+          CidrIp: !Ref OnPremSubnet

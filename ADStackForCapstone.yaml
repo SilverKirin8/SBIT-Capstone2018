@@ -2,13 +2,7 @@ AWSTemplateFormatVersion: 2010-09-09
 Description: >-
   This stack deploys and configures Active Directory domain controllers into an
   existing VPC environment. This stack makes use of the outputs from the 
-  "VPCEnvironmentForCapstone" stack. 
-
-  This stack will deploy two instances and, through the use of cfn-init/resource
-  metadata, will install ADDS and  configure the instances as domain controllers.
-  These instances will fulfill the requirement for at least two DCs in the 
-  environment. Any further DCs will be created by the "AdditionalDCStackForCapstone"
-  stack.
+  "VPCEnvironmentForCapstone" stack.
 Parameters:
   NetworkStackName:
     Type: String
@@ -94,6 +88,10 @@ Parameters:
     Default: DC2
     MaxLength: '15'
     MinLength: '1'
+  OnPremSubnet:
+    Type: String
+    Description: This is the subnet used by the On-Premise network.
+    Default: 10.0.52.0/24
 Resources:
   DHCPOptions:
     Type: 'AWS::EC2::DHCPOptions'
@@ -632,6 +630,10 @@ Resources:
         Fn::ImportValue:
           !Sub '${NetworkStackName}-VPCID'
       SecurityGroupIngress:
+        - IpProtocol: -1
+          FromPort: -1
+          ToPort: -1
+          CidrIp: !Ref OnPremSubnet
         - IpProtocol: tcp
           FromPort: '5985'
           ToPort: '5985'
@@ -877,6 +879,10 @@ Resources:
         Fn::ImportValue:
           !Sub '${NetworkStackName}-VPCID'
       SecurityGroupIngress:
+        - IpProtocol: -1
+          FromPort: -1
+          ToPort: -1
+          CidrIp: !Ref OnPremSubnet
         - IpProtocol: tcp
           FromPort: '5985'
           ToPort: '5985'
@@ -1122,6 +1128,10 @@ Resources:
         Fn::ImportValue:
           !Sub '${NetworkStackName}-VPCID'
       SecurityGroupIngress:
+        - IpProtocol: -1
+          FromPort: -1
+          ToPort: -1
+          CidrIp: !Ref OnPremSubnet
         - IpProtocol: tcp
           FromPort: '5985'
           ToPort: '5985'

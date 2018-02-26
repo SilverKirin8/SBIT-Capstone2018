@@ -27,10 +27,10 @@ fs2NetBIOSName = 'FS2'
 DON'T FORGET TO UPDATE CLOUDFORMATION TEMPLATE LOCATIONS
 (Either replace references to or instantiate following vars)
 '''
-vpcTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/2018056en9-NetworkStackForCapstone.yaml6o58xgwygdk'
-adTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/2018050S6O-ADStackForCapstone.yamlcajojii66ar'
-fsTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/2018048HdH-FSStackForCapstone.yamltiebtuv7wt'
-exchTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/2018050dXT-ExchangeStackForCapstone.yamlzs72nnotpr'
+vpcTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/20180565KH-NetworkStackForCapstone.yamlg9ahozyqbbf'
+adTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/20180561gq-ADStackForCapstone.yamlo9snngbyqah'
+fsTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/2018056mvg-FSStackForCapstone.yaml3mnrq8zgvj4'
+exchTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/20180563jU-ExchangeStackForCapstone.yamlfzxo6az7b38'
 
 #EC2 object allows connection and manipulation of AWS EC2 resource types
 ec2 = boto3.resource('ec2')
@@ -59,7 +59,10 @@ def main():
     userDomainAdminUsername = getUsername('Enter a username for the domain administrator account (separate account from the default "Administrator" account): ')
     userDomainAdminPassword = getPassword('Enter a password for the domain administrator account: ')
     userRestoreModePassword = getPassword('Enter a password for Active Directory Restore Mode: ')
-	userPublicIp = getIpAddress('Enter the public IP of the firewall: ')
+    userPublicIp = getIpAddress('Enter the public IP of the firewall: ')
+
+    #Inform the user of the ETA to completion
+    print('\nBuilding Environment...\nEstimated time to full completion: ~2.5hr')
 
     #Build VPC and other networking resources
     buildNetworkStack(userPublicIp)
@@ -68,10 +71,12 @@ def main():
     buildADStack(networkStackName, userDomainName, userDomainNetBIOSName, userDomainAdminUsername, userDomainAdminPassword, userRestoreModePassword, userDcInstanceType, userKeyPair)
     
     #Build File Servers and configure a Namespace and Replication
-    #buildFSStack(networkStackName, adStackName, userDomainName, userDomainNetBIOSName, userDomainAdminUsername, userDomainAdminPassword, userFsInstanceType, userVolumeSize, userKeyPair)
+    buildFSStack(networkStackName, adStackName, userDomainName, userDomainNetBIOSName, userDomainAdminUsername, userDomainAdminPassword, userFsInstanceType, userVolumeSize, userKeyPair)
     
     #Build Exchange server and configure mailboxes
-    #buildExchStack(networkStackName, adStackName, userDomainName, userDomainNetBIOSName, userDomainAdminUsername, userDomainAdminPassword, userExchangeInstanceType, userExchVolumeSize, userKeyPair)
+    buildExchStack(networkStackName, adStackName, userDomainName, userDomainNetBIOSName, userDomainAdminUsername, userDomainAdminPassword, userExchangeInstanceType, userExchVolumeSize, userKeyPair)
+    
+    waitForFsAndExch()
 
     #Announce script completion
     print(SECTION_SEPARATOR)
@@ -86,12 +91,12 @@ def buildNetworkStack(userPublicIp):
     #Print estimated time to completion
     print('\n' + SECTION_SEPARATOR)
     print('Building AWS Networking...')
-    print('Estimated time to completion: ~4-6 min.')
+    print('Estimated time to build this component: ~4-6 min.')
     
     vpcStackResponse = cloudFormationClient.create_stack(
         StackName = networkStackName,
         TemplateURL = vpcTemplateUrl,
-		Parameters=[
+        Parameters=[
             {
                 'ParameterKey' : 'VpcCidrBlock',
                 'ParameterValue' : '172.16.0.0/22'
@@ -108,7 +113,7 @@ def buildNetworkStack(userPublicIp):
                 'ParameterKey' : 'PubSub1CidrBlock',
                 'ParameterValue' : '172.16.2.0/24'
             },
-	        {
+            {
                 'ParameterKey' : 'CustPubIp',
                 'ParameterValue' : userPublicIp
             },
@@ -127,7 +132,7 @@ def buildADStack(networkStackName, userDomainName, userDomainNetBIOSName, userDo
     #Print estimated time to completion
     print('\n' + SECTION_SEPARATOR)
     print('Building Active Directory...')
-    print('Estimated time to completion: ~25-30 min.')
+    print('Estimated time to build this component: ~25-30 min.')
     
     adStackResponse = cloudFormationClient.create_stack(
         StackName = adStackName,
@@ -181,13 +186,10 @@ def buildADStack(networkStackName, userDomainName, userDomainNetBIOSName, userDo
 
 #Build first two File Servers in AD Domain
 def buildFSStack(networkStackName, adStackName, userDomainName, userDomainNetBIOSName, userDomainAdminUsername, userDomainAdminPassword, userFsInstanceType, userVolumeSize, userKeyPair):
-    #fsStackWaiter can be called to halt script execution until the specified stack is finished building
-    fsStackWaiter = cloudFormationClient.get_waiter('stack_create_complete')
-    
     #Print estimated time to completion
     print('\n' + SECTION_SEPARATOR)
     print('Building File Servers...')
-    print('Estimated time to completion: ~10-15 min.')
+    print('Estimated time to build this component: ~10-15 min.')
     
     fsStackResponse = cloudFormationClient.create_stack(
         StackName = fsStackName,
@@ -240,18 +242,13 @@ def buildFSStack(networkStackName, adStackName, userDomainName, userDomainNetBIO
         ],
         OnFailure='DO_NOTHING'
     )
-    #fsStackWaiter.wait(StackName=fsStackResponse['StackId'])
-    
-    print('File Servers... Build Complete!')
 
+#Build first Exchange server in AD Domain
 def buildExchStack(networkStackName, adStackName, userDomainName, userDomainNetBIOSName, userDomainAdminUsername, userDomainAdminPassword, userExchangeInstanceType, userExchVolumeSize, userKeyPair):
-    #exchStackWaiter can be called to halt script execution until the specified stack is finished building
-    exchStackWaiter = cloudFormationClient.get_waiter('stack_create_complete')
-    
-        #Print estimated time to completion
+    #Print estimated time to completion
     print('\n' + SECTION_SEPARATOR)
     print('Building Exchange Server...')
-    print('Estimated time to completion: ~### min.')
+    print('Estimated time to build this component: ~1.75-2 hr. (~105-120 min.)')
     
     exchStackResponse = cloudFormationClient.create_stack(
         StackName = exchStackName,
@@ -300,9 +297,19 @@ def buildExchStack(networkStackName, adStackName, userDomainName, userDomainNetB
         ],
         OnFailure='DO_NOTHING'
     )
-    #exchStackWaiter.wait(StackName=exchStackResponse['StackId'])
+
+#Wait for File Servers and Exchange Server (Allows these to run asynchronously)
+def waitForFsAndExch():
+    #fsStackWaiter can be called to halt script execution until the specified stack is finished building
+    fsStackWaiter = cloudFormationClient.get_waiter('stack_create_complete')
+    #exchStackWaiter can be called to halt script execution until the specified stack is finished building
+    exchStackWaiter = cloudFormationClient.get_waiter('stack_create_complete')
     
-    print('Exchange Server... Build Complete!')
+    fsStackWaiter.wait(StackName=fsStackResponse['StackId'])
+    print('\nFile Servers... Build Complete!')
+
+    exchStackWaiter.wait(StackName=exchStackResponse['StackId'])
+    print('\nExchange Server... Build Complete!')
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #Prompt for and validate the Domain Name
@@ -458,19 +465,19 @@ def getPassword(message):
             print('Invalid password. Password should be 8 characters or more and contain an uppercase letter, lowercase letter, number, and symbol.')
     return userPassword
 
-def getIpAddress(message)
+def getIpAddress(message):
     validIp = False
-	#Loop until user enters a valid IP address
-	#Does not validate for public vs. private IPs!!!
-	while(not validIp):
-	    userIp = input(message)
-		#Ensure the IP is in the correct format
-		regex = re.compile('^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$')
-		if(regex.match(userIp)):
-		    validIp = True
-		else:
-		    print('Invalid IP. IPs must be in decimal-dot format. (Ex. 192.168.0.0)')
-	return userIp
+    #Loop until user enters a valid IP address
+    #Does not validate for public vs. private IPs!!!
+    while(not validIp):
+        userIp = input(message)
+        #Ensure the IP is in the correct format
+        regex = re.compile('^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$')
+        if(regex.match(userIp)):
+            validIp = True
+        else:
+            print('Invalid IP. IPs must be in decimal-dot format. (Ex. 192.168.0.0)')
+    return userIp
 
 
 if __name__ == "__main__":

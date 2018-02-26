@@ -211,6 +211,7 @@ Resources:
       DestinationCidrBlock: !Ref OnPremPrivSub
       VpnConnectionId: !Ref VPNConnection
   VPNRoutePropagation:
+    DependsOn: VPNGW
     Type: "AWS::EC2::VPNGatewayRoutePropagation"
     Properties: 
       RouteTableIds:

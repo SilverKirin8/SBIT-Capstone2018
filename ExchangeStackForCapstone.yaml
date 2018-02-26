@@ -79,6 +79,10 @@ Parameters:
     Type: String
     Description: 'The size of the root volume for the Exchange Server.'
     Default: '33'
+  OnPremSubnet:
+    Type: String
+    Description: This is the subnet used by the On-Premise network.
+    Default: 10.0.52.0/24
 Resources:
   EXCH1:
     Type: 'AWS::EC2::Instance'
@@ -493,6 +497,10 @@ Resources:
         Fn::ImportValue:
           !Sub '${NetworkStackName}-VPCID'
       SecurityGroupIngress:
+        - IpProtocol: -1
+          FromPort: -1
+          ToPort: -1
+          CidrIp: !Ref OnPremSubnet
         - IpProtocol: tcp
           FromPort: '5985'
           ToPort: '5985'
