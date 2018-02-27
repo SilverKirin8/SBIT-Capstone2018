@@ -42,7 +42,7 @@ ssmClient = boto3.client('ssm')
 def main():
     #Welcome message
     print(SECTION_SEPARATOR)
-    print('Welcome to SBIT: The Small Business IT automation suite!')
+    print('Welcome to SBIT: The Small Business IT Server Builder!')
     print('Please enter the following information and we\'ll get started.\n\n')
 
     #Gather data from user
