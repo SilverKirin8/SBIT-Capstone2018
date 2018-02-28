@@ -182,7 +182,7 @@ Resources:
                   - $VolumeSize="
                   - !Ref FSVolumeSize
                   - 'GB"; '
-                  - $QuotaPath="c:\AWSShares"
+                  - $QuotaPath="z:\AWSShares"
                   - '; '
                   - 'Set-FsrmSetting -SmtpServer $SmtpServer -AdminEmailAddress $AdminEmailAddress; '
                   - '$Action = New-FsrmAction -Type Email -MailTo $AdminEmailAddress -RunLimitInterval 120 '
@@ -217,9 +217,9 @@ Resources:
                   - 'Add-DfsrConnection -DomainName $DomainName -GroupName $rGroupName '
                   - '-SourceComputerName "$Fs1NetBiosName.$DomainName" -DestinationComputerName "$Fs2NetBiosName.$DomainName"; '
                   - 'Set-DfsrMembership -GroupName $rGroupName -FolderName $rFolderName -ComputerName "$Fs1NetBiosName.$DomainName" '
-                  - '-ContentPath "c:\AWSShares" -PrimaryMember $true -Force; '
+                  - '-ContentPath "z:\AWSShares" -PrimaryMember $true -Force; '
                   - 'Set-DfsrMembership -GroupName $rGroupName -FolderName $rFolderName -ComputerName "$Fs2NetBiosName.$DomainName" '
-                  - '-ContentPath "c:\AWSShares" -Force'
+                  - '-ContentPath "z:\AWSShares" -Force'
             'c:\cfn\scripts\ConfigureFsrmAndDfs.bat':
               source: 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/ConfigureFsrmAndDfs.bat'
             'c:\cfn\scripts\Enable-AutoLogon.ps1':
@@ -253,7 +253,7 @@ Resources:
                 - ''
                 - - >-
                     powershell.exe -Command 
-                    'c:\cfn\scripts\Format-AWSDisk.ps1 -DriveLetter "z"'
+                    c:\cfn\scripts\Format-AWSDisk.ps1 -DriveLetter "z"
         rename:
           commands:
             a-set-static-ip:
@@ -334,7 +334,7 @@ Resources:
                   - !Ref DomainAdminPassword
                   - ''''
                   - ' -AsPlainText -Force)))) -Script { '
-                  - c:\cfn\scripts\Create-SharedFolders.ps1
+                  - c:\cfn\scripts\Create-SharedFolders.ps1 -DriveLetter "z:"
                   - ' }"'
               waitAfterCompletion: '0'
         configureFsrmAndDfs:
@@ -399,6 +399,9 @@ Resources:
               - |+
               - |
                 </script>
+      Volumes:
+        - VolumeId: !Ref FS1Volume
+          Device: 'xvdf'
   FS2:
     Type: 'AWS::EC2::Instance'
     Metadata:
@@ -474,7 +477,7 @@ Resources:
                   - $VolumeSize="
                   - !Ref FSVolumeSize
                   - 'GB"; '
-                  - $QuotaPath="c:\AWSShares"
+                  - $QuotaPath="z:\AWSShares"
                   - '; '
                   - 'Set-FsrmSetting -SmtpServer $SmtpServer -AdminEmailAddress $AdminEmailAddress; '
                   - '$Action = New-FsrmAction -Type Email -MailTo $AdminEmailAddress -RunLimitInterval 120 '
@@ -518,7 +521,7 @@ Resources:
                 - ''
                 - - >-
                     powershell.exe -Command 
-                    'c:\cfn\scripts\Format-AWSDisk.ps1 -DriveLetter "z"'
+                    c:\cfn\scripts\Format-AWSDisk.ps1 -DriveLetter "z"
               waitAfterCompletion: '0'
         rename:
           commands:
@@ -600,7 +603,7 @@ Resources:
                   - !Ref DomainAdminPassword
                   - ''''
                   - ' -AsPlainText -Force)))) -Script { '
-                  - c:\cfn\scripts\Create-SharedFolders.ps1
+                  - c:\cfn\scripts\Create-SharedFolders.ps1 -DriveLetter "z:"
                   - ' }"'
               waitAfterCompletion: '0'
         configureFsrm:
@@ -628,7 +631,6 @@ Resources:
                 - ''
                 - - 'powershell.exe -Command c:\cfn\scripts\Disable-AutoLogon.ps1'
               waitAfterCompletion: '0'
-          
         finalize:
           commands:
             a-signal-success:
@@ -665,6 +667,27 @@ Resources:
               - |+
               - |
                 </script>
+      Volumes:
+      - VolumeId: !Ref FS2Volume
+        Device: 'xvdf'
+  FS1Volume:
+    Type: 'AWS::EC2::Volume'
+    Properties:
+      AvailabilityZone: !Ref PrimaryAZ
+      Size: !Ref FSVolumeSize
+      Tags:
+        - Key: 'Name'
+          Value: 'FS1-Volume2'
+      VolumeType: 'gp2'
+  FS2Volume:
+    Type: 'AWS::EC2::Volume'
+    Properties:
+      AvailabilityZone: !Ref SecondaryAZ
+      Size: !Ref FSVolumeSize
+      Tags:
+        - Key: 'Name'
+          Value: 'FS2-Volume2'
+      VolumeType: 'gp2'
   FS1WaitCondition:
     Type: 'AWS::CloudFormation::WaitCondition'
     DependsOn: FS1

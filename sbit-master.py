@@ -27,9 +27,9 @@ fs2NetBIOSName = 'FS2'
 DON'T FORGET TO UPDATE CLOUDFORMATION TEMPLATE LOCATIONS
 (Either replace references to or instantiate following vars)
 '''
-vpcTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/20180565KH-NetworkStackForCapstone.yamlg9ahozyqbbf'
+vpcTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/2018058mgT-NetworkStackForCapstone.yaml1n1cy6uozdx'
 adTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/20180561gq-ADStackForCapstone.yamlo9snngbyqah'
-fsTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/2018056mvg-FSStackForCapstone.yaml3mnrq8zgvj4'
+fsTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/2018058Q3h-FSStackForCapstone.yamlp4peztmldgk'
 exchTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/20180563jU-ExchangeStackForCapstone.yamlfzxo6az7b38'
 
 #EC2 object allows connection and manipulation of AWS EC2 resource types
@@ -71,12 +71,12 @@ def main():
     buildADStack(networkStackName, userDomainName, userDomainNetBIOSName, userDomainAdminUsername, userDomainAdminPassword, userRestoreModePassword, userDcInstanceType, userKeyPair)
     
     #Build File Servers and configure a Namespace and Replication
-    buildFSStack(networkStackName, adStackName, userDomainName, userDomainNetBIOSName, userDomainAdminUsername, userDomainAdminPassword, userFsInstanceType, userVolumeSize, userKeyPair)
+    fsResponse = buildFSStack(networkStackName, adStackName, userDomainName, userDomainNetBIOSName, userDomainAdminUsername, userDomainAdminPassword, userFsInstanceType, userVolumeSize, userKeyPair)
     
     #Build Exchange server and configure mailboxes
-    buildExchStack(networkStackName, adStackName, userDomainName, userDomainNetBIOSName, userDomainAdminUsername, userDomainAdminPassword, userExchangeInstanceType, userExchVolumeSize, userKeyPair)
+    exchResponse = buildExchStack(networkStackName, adStackName, userDomainName, userDomainNetBIOSName, userDomainAdminUsername, userDomainAdminPassword, userExchangeInstanceType, userExchVolumeSize, userKeyPair)
     
-    waitForFsAndExch()
+    waitForFsAndExch(fsResponse, exchResponse)
 
     #Announce script completion
     print(SECTION_SEPARATOR)
@@ -242,6 +242,7 @@ def buildFSStack(networkStackName, adStackName, userDomainName, userDomainNetBIO
         ],
         OnFailure='DO_NOTHING'
     )
+    return fsStackResponse
 
 #Build first Exchange server in AD Domain
 def buildExchStack(networkStackName, adStackName, userDomainName, userDomainNetBIOSName, userDomainAdminUsername, userDomainAdminPassword, userExchangeInstanceType, userExchVolumeSize, userKeyPair):
@@ -297,18 +298,19 @@ def buildExchStack(networkStackName, adStackName, userDomainName, userDomainNetB
         ],
         OnFailure='DO_NOTHING'
     )
+    return exchStackResponse
 
 #Wait for File Servers and Exchange Server (Allows these to run asynchronously)
-def waitForFsAndExch():
+def waitForFsAndExch(fsResponse, exchResponse):
     #fsStackWaiter can be called to halt script execution until the specified stack is finished building
     fsStackWaiter = cloudFormationClient.get_waiter('stack_create_complete')
     #exchStackWaiter can be called to halt script execution until the specified stack is finished building
     exchStackWaiter = cloudFormationClient.get_waiter('stack_create_complete')
     
-    fsStackWaiter.wait(StackName=fsStackResponse['StackId'])
+    fsStackWaiter.wait(StackName=fsResponse['StackId'])
     print('\nFile Servers... Build Complete!')
 
-    exchStackWaiter.wait(StackName=exchStackResponse['StackId'])
+    exchStackWaiter.wait(StackName=exchResponse['StackId'],WaiterConfig={'Delay':30,'MaxAttempts':200})
     print('\nExchange Server... Build Complete!')
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
