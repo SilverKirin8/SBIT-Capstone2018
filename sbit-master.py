@@ -14,10 +14,10 @@ Add prompts for these for presentation
     Video with other names
     Live demo with defaults
 '''
-networkStackName = 'CapstoneNetworkStack'
-adStackName = 'CapstoneADStack'
-fsStackName = 'CapstoneFSStack'
-exchStackName = 'CapstoneExchStack'
+networkStackName = 'CapstoneNetworkStack-Demo'
+adStackName = 'CapstoneADStack-Demo'
+fsStackName = 'CapstoneFSStack-Demo'
+exchStackName = 'CapstoneExchStack-Demo'
 
 #Should change these in the future to let user define all of this, skipping for now to save time
 fs1NetBIOSName = 'FS1'
@@ -27,7 +27,8 @@ fs2NetBIOSName = 'FS2'
 DON'T FORGET TO UPDATE CLOUDFORMATION TEMPLATE LOCATIONS
 (Either replace references to or instantiate following vars)
 '''
-vpcTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/2018058mgT-NetworkStackForCapstone.yaml1n1cy6uozdx'
+vpcTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/2018061awF-NetworkStackForCapstone-Demo.yamlheokzz890t'
+#vpcTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/2018058mgT-NetworkStackForCapstone.yaml1n1cy6uozdx'
 adTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/20180561gq-ADStackForCapstone.yamlo9snngbyqah'
 fsTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/2018058Q3h-FSStackForCapstone.yamlp4peztmldgk'
 exchTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/20180563jU-ExchangeStackForCapstone.yamlfzxo6az7b38'
