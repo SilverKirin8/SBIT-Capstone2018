@@ -9,11 +9,6 @@ MIN_VOLUME_SIZE=1
 
 SECTION_SEPARATOR = '#'*60
 
-'''
-Add prompts for these for presentation
-    Video with other names
-    Live demo with defaults
-'''
 networkStackName = 'CapstoneNetworkStack-Demo'
 adStackName = 'CapstoneADStack-Demo'
 fsStackName = 'CapstoneFSStack-Demo'
@@ -25,7 +20,6 @@ fs2NetBIOSName = 'FS2'
 
 '''
 DON'T FORGET TO UPDATE CLOUDFORMATION TEMPLATE LOCATIONS
-(Either replace references to or instantiate following vars)
 '''
 vpcTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/2018061awF-NetworkStackForCapstone-Demo.yamlheokzz890t'
 #vpcTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-us-east-2/2018058mgT-NetworkStackForCapstone.yaml1n1cy6uozdx'
@@ -37,8 +31,6 @@ exchTemplateUrl = 'https://s3.us-east-2.amazonaws.com/cf-templates-65d2poexw312-
 ec2 = boto3.resource('ec2')
 #CloudFormation client allows creation of AWS resources in a stack by using CloudFormation templates
 cloudFormationClient = boto3.client('cloudformation')
-#ssmClient allows remote command execution against EC2 instances
-ssmClient = boto3.client('ssm')
 
 def main():
     #Welcome message
